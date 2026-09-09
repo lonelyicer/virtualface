@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "rate_hz": 100.0,
+  "next_id": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "type_id": "pico.synthetic",
+      "x": 48,
+      "y": 96,
+      "params": { "hz": 0.4, "amplitude": 0.8 }
+    },
+    {
+      "id": 2,
+      "type_id": "unified.arkit_to_ue",
+      "x": 320,
+      "y": 96,
+      "params": {}
+    },
+    {
+      "id": 3,
+      "type_id": "unified.one_euro",
+      "x": 592,
+      "y": 96,
+      "params": { "min_cutoff": 1.0, "beta": 0.5, "d_cutoff": 0.1 }
+    },
+    {
+      "id": 4,
+      "type_id": "vrc.osc_output",
+      "x": 864,
+      "y": 96,
+      "params": {
+        "host": "127.0.0.1",
+        "port": 9000,
+        "prefix": "/avatar/parameters/",
+        "send_all": true,
+        "binary_bits": 0
+      }
+    }
+  ],
+  "edges": [
+    { "from": { "node": 1, "port": 0 }, "to": { "node": 2, "port": 0 } },
+    { "from": { "node": 2, "port": 0 }, "to": { "node": 3, "port": 0 } },
+    { "from": { "node": 3, "port": 0 }, "to": { "node": 4, "port": 0 } }
+  ]
+}

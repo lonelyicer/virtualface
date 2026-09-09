@@ -1,0 +1,22 @@
+[package]
+name = "vf-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VirtualFace desktop application"
+publish = false
+
+[[bin]]
+name = "virtualface"
+path = "src/main.rs"
+
+[dependencies]
+vf-core.workspace = true
+vf-ui.workspace = true
+gpui-kit.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+ctrlc.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde_json.workspace = true

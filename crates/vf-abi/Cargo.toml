@@ -1,0 +1,10 @@
+[package]
+name = "vf-abi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Stable C ABI for VirtualFace plugins"
+publish = false
+
+[lib]
+name = "vf_abi"

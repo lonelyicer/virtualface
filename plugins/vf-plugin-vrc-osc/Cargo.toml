@@ -1,0 +1,18 @@
+[package]
+name = "vf-plugin-vrc-osc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VRChat OSC output plugin"
+publish = false
+
+[lib]
+name = "vf_plugin_vrc_osc"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+vf-sdk.workspace = true
+vf-abi.workspace = true
+rosc.workspace = true
+serde.workspace = true
+serde_json.workspace = true

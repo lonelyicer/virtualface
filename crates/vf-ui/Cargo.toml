@@ -1,0 +1,19 @@
+[package]
+name = "vf-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VirtualFace gpui-kit workspace and node graph editor"
+publish = false
+
+[lib]
+name = "vf_ui"
+
+[dependencies]
+vf-core.workspace = true
+vf-sdk.workspace = true
+vf-abi.workspace = true
+gpui-kit.workspace = true
+parking_lot.workspace = true
+serde_json.workspace = true
+tracing.workspace = true

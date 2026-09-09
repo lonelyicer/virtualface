@@ -1,0 +1,17 @@
+[package]
+name = "vf-plugin-pico"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "PICO face-tracking input plugin"
+publish = false
+
+[lib]
+name = "vf_plugin_pico"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+vf-sdk.workspace = true
+vf-abi.workspace = true
+serde.workspace = true
+serde_json.workspace = true
