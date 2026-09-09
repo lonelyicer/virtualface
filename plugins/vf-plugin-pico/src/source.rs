@@ -1,5 +1,6 @@
 use crate::packet::parse_pico_packet;
-use crate::remap::{pico_to_arkit, pico_visemes};
+use crate::remap::pico_visemes;
+use crate::ue::UeMapper;
 use std::net::UdpSocket;
 use std::sync::Mutex;
 use std::sync::{
@@ -8,13 +9,14 @@ use std::sync::{
 };
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+use vf_abi::VfUnifiedFrame;
 use vf_sdk::{
     Category, Host, Node, NodeDescriptor, NodeStatus, ParamDef, PortDesc, PortIo, ProcessCtx,
-    Result, SCHEMA_ARKIT52, SCHEMA_VISEMES20, param_i64,
+    Result, SCHEMA_VISEMES20, param_i64,
 };
 
 struct Slot {
-    latest: Mutex<Option<([f32; 52], [f32; 20], Instant)>>,
+    latest: Mutex<Option<(VfUnifiedFrame, [f32; 20], Instant)>>,
     timeouts: std::sync::atomic::AtomicU64,
 }
 
@@ -30,7 +32,7 @@ impl Node for PicoUdpSource {
     fn descriptor() -> NodeDescriptor {
         NodeDescriptor::new("pico.udp_source", "PICO UDP Source", Category::Input)
             .source()
-            .output(PortDesc::blendshapes("arkit", SCHEMA_ARKIT52, 52))
+            .output(PortDesc::unified("unified"))
             .output(PortDesc::blendshapes("visemes", SCHEMA_VISEMES20, 20))
             .output(PortDesc::float("timeout"))
             .param(ParamDef::int("port", "UDP Port", 29765, 1, 65535))
@@ -67,20 +69,19 @@ impl Node for PicoUdpSource {
         }
     }
 
-    fn process(&mut self, _ctx: &ProcessCtx, io: &mut PortIo<'_>) -> Result<()> {
-        let (arkit, visemes, timeout) = {
+    fn process(&mut self, ctx: &ProcessCtx, io: &mut PortIo<'_>) -> Result<()> {
+        let (mut frame, visemes, timeout) = {
             let g = self.slot.latest.lock().unwrap();
             match &*g {
-                Some((a, v, t)) => {
+                Some((f, v, t)) => {
                     let age = t.elapsed().as_secs_f32();
-                    (*a, *v, age)
+                    (*f, *v, age)
                 }
-                None => ([0.0; 52], [0.0; 20], 1.0),
+                None => (VfUnifiedFrame::default(), [0.0; 20], 1.0),
             }
         };
-        let out = io.output_blendshapes_mut(0)?;
-        let n = out.len().min(arkit.len());
-        out[..n].copy_from_slice(&arkit[..n]);
+        frame.timestamp_us = ctx.now_us;
+        *io.output_unified_mut(0)? = frame;
         let vis = io.output_blendshapes_mut(1)?;
         let n = vis.len().min(visemes.len());
         vis[..n].copy_from_slice(&visemes[..n]);
@@ -135,14 +136,15 @@ fn recv_loop(port: u16, host: Host, slot: Arc<Slot>, stop: Arc<AtomicBool>) {
     host.info(&format!("listening on UDP {port}"));
     let mut buf = [0u8; 2048];
     let mut timeout_streak = 0u32;
+    let mut mapper = UeMapper::default();
     while !stop.load(Ordering::Relaxed) {
         match sock.recv_from(&mut buf) {
             Ok((n, _)) => {
                 timeout_streak = 0;
                 if let Some(frame) = parse_pico_packet(&buf[..n]) {
-                    let arkit = pico_to_arkit(&frame.weights);
+                    let unified = mapper.map_pico(&frame.weights, host.now_us());
                     let vis = pico_visemes(&frame.weights);
-                    *slot.latest.lock().unwrap() = Some((arkit, vis, Instant::now()));
+                    *slot.latest.lock().unwrap() = Some((unified, vis, Instant::now()));
                     host.wake();
                 }
             }

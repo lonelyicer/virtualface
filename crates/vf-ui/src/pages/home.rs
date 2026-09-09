@@ -17,8 +17,10 @@ impl Workspace {
 
         v_flex()
             .id("home-page")
+            .flex_1()
             .size_full()
             .min_w(px(0.))
+            .min_h(px(0.))
             .p_6()
             .gap_4()
             .overflow_y_scroll()
@@ -74,7 +76,15 @@ impl Workspace {
                     .id("home-graph")
                     .outline()
                     .title("节点图")
-                    .child(div().child(format!("路径  {}", self.graph_path)))
+                    .child(div().child(format!("图  {}", self.graph_name())))
+                    .when(!self.graph_path.is_empty(), |el| {
+                        el.child(
+                            div()
+                                .text_xs()
+                                .text_color(muted)
+                                .child(self.graph_path.clone()),
+                        )
+                    })
                     .child(div().child(format!(
                         "节点 {}  ·  连线 {}  ·  缺失插件 {}",
                         graph.nodes.len(),

@@ -2,12 +2,13 @@ use gpui_kit::component::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::*;
 use std::sync::Arc;
 use vf_abi::VfValueTag;
-use vf_core::{NodeId, PortRef, Session, Snapshot};
+use vf_core::{PortRef, Session, Snapshot};
 use vf_sdk::Category;
 
-pub const NODE_W: f32 = 220.0;
+pub const NODE_W: f32 = 280.0;
 pub const HEADER_H: f32 = 32.0;
-pub const PORT_H: f32 = 22.0;
+pub const PORT_H: f32 = 24.0;
+pub const EDITOR_H: f32 = 20.0;
 pub const PORT_R: f32 = 5.0;
 pub const ZOOM_MIN: f32 = 0.2;
 pub const ZOOM_MAX: f32 = 2.5;
@@ -65,9 +66,27 @@ impl Camera {
 #[derive(Clone, Copy)]
 pub enum Drag {
     None,
-    Node { id: NodeId, grab: Vec2 },
-    Pan { last: Point<Pixels> },
-    Wire { from: PortRef, current: Vec2 },
+    Pan {
+        last: Point<Pixels>,
+    },
+    Nodes {
+        last: Vec2,
+    },
+    Wire {
+        from: PortRef,
+        output: bool,
+        current: Vec2,
+    },
+    Marquee {
+        start: Vec2,
+        current: Vec2,
+        additive: bool,
+    },
+    Rmb {
+        origin: Point<Pixels>,
+        last: Point<Pixels>,
+        world: Vec2,
+    },
 }
 
 pub fn category_color(cat: Category) -> u32 {
@@ -90,14 +109,6 @@ pub fn tag_color(tag: VfValueTag) -> u32 {
         VfValueTag::Bytes => 0x78716c,
         VfValueTag::Empty => 0x52525b,
     }
-}
-
-pub fn node_height(n_in: usize, n_out: usize) -> f32 {
-    HEADER_H + (n_in.max(n_out).max(1) as f32) * PORT_H + 8.0
-}
-
-pub fn port_y(index: u32) -> f32 {
-    HEADER_H + PORT_H * (index as f32 + 0.5)
 }
 
 pub fn status_rgb(level: u32) -> u32 {

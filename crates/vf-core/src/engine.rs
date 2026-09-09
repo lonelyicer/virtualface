@@ -2,6 +2,7 @@ use crate::graph::{ExecPlan, Graph, NodeId};
 use crate::instance::{NodeInstance, PortBuffer, Snapshot, SnapshotValue, snapshot_value};
 use crate::log::{LogBus, now_us};
 use crate::registry::NodeRegistry;
+use crate::vars::VarType;
 use arc_swap::ArcSwap;
 use parking_lot::{Condvar, Mutex};
 use std::collections::HashMap;
@@ -9,11 +10,7 @@ use std::ffi::c_void;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
-use tracing::{debug, error, warn};
-use vf_abi::{
-    VF_LOG_DEBUG, VF_LOG_ERROR, VF_LOG_INFO, VF_LOG_WARN, VfHostApi, VfProcessCtx, VfValue,
-    VfValueTag,
-};
+use vf_abi::{VfHostApi, VfProcessCtx, VfValue, VfValueTag};
 
 pub enum EngineCommand {
     SwapPlan(ExecPlan, Graph),
@@ -213,7 +210,10 @@ fn handle_cmd(inner: &mut EngineInner, cmd: EngineCommand) -> bool {
         EngineCommand::SetParam(id, key, value) => {
             if let Some(n) = inner.nodes.get_mut(&id) {
                 if let Err(e) = n.instance.set_param(&key, &value) {
-                    warn!(node = id.0, error = %e, "set_param failed");
+                    inner
+                        .host_state
+                        .log
+                        .log(1, Some(id.0), format!("set_param failed: {e}"));
                 }
             }
             if let Some(gn) = inner.graph.node_mut(id) {
@@ -266,7 +266,10 @@ fn apply_plan(inner: &mut EngineInner, plan: ExecPlan, graph: Graph) {
                 }
                 if was_running {
                     if let Err(e) = inst.start() {
-                        warn!(node = id.0, error = %e, "start failed");
+                        inner
+                            .host_state
+                            .log
+                            .log(1, Some(id.0), format!("start failed: {e}"));
                     }
                 }
                 let mut out_bufs: Vec<PortBuffer> = ty
@@ -292,7 +295,12 @@ fn apply_plan(inner: &mut EngineInner, plan: ExecPlan, graph: Graph) {
                     refresh_runtime_ports(rt);
                 }
             }
-            Err(e) => error!(node = id.0, error = %e, "failed to create node"),
+            Err(e) => {
+                inner
+                    .host_state
+                    .log
+                    .log(0, Some(id.0), format!("failed to create node: {e}"))
+            }
         }
     }
     inner.plan = plan;
@@ -302,7 +310,10 @@ fn apply_plan(inner: &mut EngineInner, plan: ExecPlan, graph: Graph) {
 fn start_all(inner: &mut EngineInner) {
     for (id, rt) in inner.nodes.iter_mut() {
         if let Err(e) = rt.instance.start() {
-            warn!(node = id.0, error = %e, "start failed");
+            inner
+                .host_state
+                .log
+                .log(1, Some(id.0), format!("start failed: {e}"));
         }
     }
 }
@@ -351,6 +362,10 @@ fn run_tick(inner: &mut EngineInner) {
         let Some(binding) = inner.plan.bindings.get(&id).cloned() else {
             continue;
         };
+        if let Some((is_get, vty)) = VarType::from_type_id(&binding.type_id) {
+            tick_builtin(inner, id, &binding, is_get, vty);
+            continue;
+        }
         // Assemble inputs from source outputs.
         let mut ins = vec![VfValue::empty(); binding.n_in];
         for (i, src) in binding.inputs.iter().enumerate() {
@@ -362,6 +377,25 @@ fn run_tick(inner: &mut EngineInner) {
                 }
             }
         }
+        for (key, from) in &binding.param_inputs {
+            let Some(v) = inner
+                .nodes
+                .get(&from.node)
+                .and_then(|rt| rt.out_vals.get(from.port as usize))
+                .copied()
+            else {
+                continue;
+            };
+            let json = vf_to_json(v);
+            if let Some(rt) = inner.nodes.get_mut(&id) {
+                let _ = rt.instance.set_param(key, &json);
+            }
+            if let Some(gn) = inner.graph.node_mut(id) {
+                if let Some(obj) = gn.params.as_object_mut() {
+                    obj.insert(key.clone(), json);
+                }
+            }
+        }
         let Some(rt) = inner.nodes.get_mut(&id) else {
             continue;
         };
@@ -369,8 +403,126 @@ fn run_tick(inner: &mut EngineInner) {
         let st = rt.instance.process(&ctx, &rt.in_vals, &mut rt.out_vals);
         if st == vf_abi::VF_ERR {
             inner.drops += 1;
-            debug!(node = id.0, "node process error / disabled");
+            inner
+                .host_state
+                .log
+                .log(3, Some(id.0), "node process error / disabled");
         }
+    }
+}
+
+fn tick_builtin(
+    inner: &mut EngineInner,
+    id: NodeId,
+    binding: &crate::graph::NodeBinding,
+    is_get: bool,
+    vty: VarType,
+) {
+    let name = inner
+        .graph
+        .node(id)
+        .and_then(|n| n.params.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if is_get {
+        let value = inner
+            .graph
+            .var(&name)
+            .map(|v| v.value.clone())
+            .unwrap_or_else(|| vty.default_value());
+        if let Some(rt) = inner.nodes.get_mut(&id) {
+            write_builtin_out(rt, vty, &value);
+        }
+        return;
+    }
+    let mut incoming = VfValue::empty();
+    if let Some(Some(p)) = binding.inputs.first() {
+        if let Some(src_rt) = inner.nodes.get(&p.node) {
+            if let Some(v) = src_rt.out_vals.get(p.port as usize) {
+                incoming = *v;
+            }
+        }
+    }
+    if incoming.tag != VfValueTag::Empty {
+        let json = vf_to_json(incoming);
+        if let Some(var) = inner.graph.var_mut(&name) {
+            var.value = json.clone();
+        }
+        if let Some(rt) = inner.nodes.get_mut(&id) {
+            write_builtin_out(rt, vty, &json);
+        }
+    } else {
+        let value = inner
+            .graph
+            .var(&name)
+            .map(|v| v.value.clone())
+            .unwrap_or_else(|| vty.default_value());
+        if let Some(rt) = inner.nodes.get_mut(&id) {
+            write_builtin_out(rt, vty, &value);
+        }
+    }
+}
+
+fn write_builtin_out(rt: &mut NodeRuntime, vty: VarType, value: &serde_json::Value) {
+    if matches!(vty, VarType::String) {
+        let s = match value {
+            serde_json::Value::String(s) => s.clone(),
+            other => other.to_string(),
+        };
+        if let Some(PortBuffer::Bytes { data, .. }) = rt.out_bufs.get_mut(0) {
+            data.clear();
+            data.extend_from_slice(s.as_bytes());
+        }
+        if let Some(buf) = rt.out_bufs.get_mut(0) {
+            let v = buf.as_value(VfValueTag::Bytes);
+            if let Some(slot) = rt.out_vals.get_mut(0) {
+                *slot = v;
+            }
+        }
+        return;
+    }
+    if let Some(slot) = rt.out_vals.get_mut(0) {
+        *slot = json_to_vf(value, vty.tag());
+    }
+}
+
+fn vf_to_json(v: VfValue) -> serde_json::Value {
+    match v.tag {
+        VfValueTag::Float => serde_json::json!(v.as_float().unwrap_or(0.0)),
+        VfValueTag::Int => serde_json::json!(v.as_int().unwrap_or(0)),
+        VfValueTag::Bool => serde_json::json!(v.as_bool().unwrap_or(false)),
+        VfValueTag::Bytes => {
+            let b = unsafe { v.payload.bytes };
+            if b.ptr.is_null() || b.len == 0 {
+                serde_json::json!("")
+            } else {
+                let sl = unsafe { std::slice::from_raw_parts(b.ptr, b.len as usize) };
+                serde_json::Value::String(String::from_utf8_lossy(sl).into_owned())
+            }
+        }
+        _ => serde_json::Value::Null,
+    }
+}
+
+fn json_to_vf(v: &serde_json::Value, tag: VfValueTag) -> VfValue {
+    match tag {
+        VfValueTag::Float => {
+            let n = v
+                .as_f64()
+                .or_else(|| v.as_i64().map(|i| i as f64))
+                .unwrap_or(0.0);
+            VfValue::float(n as f32)
+        }
+        VfValueTag::Int => {
+            let n = v
+                .as_i64()
+                .or_else(|| v.as_f64().map(|f| f as i64))
+                .unwrap_or(0);
+            VfValue::int(n)
+        }
+        VfValueTag::Bool => VfValue::boolean(v.as_bool().unwrap_or(false)),
+        _ => VfValue::empty(),
     }
 }
 
@@ -425,14 +577,12 @@ unsafe extern "C" fn host_log(
             .to_string_lossy()
             .into_owned()
     };
-    match level {
-        VF_LOG_ERROR => tracing::error!(node = node_handle, "{message}"),
-        VF_LOG_WARN => tracing::warn!(node = node_handle, "{message}"),
-        VF_LOG_INFO => tracing::info!(node = node_handle, "{message}"),
-        VF_LOG_DEBUG => tracing::debug!(node = node_handle, "{message}"),
-        _ => tracing::trace!(node = node_handle, "{message}"),
-    }
-    state.log.log(level, Some(node_handle), message);
+    let node = if node_handle == 0 {
+        None
+    } else {
+        Some(node_handle)
+    };
+    state.log.log(level, node, message);
 }
 
 unsafe extern "C" fn host_wake(user: *mut c_void, _node_handle: u64) {

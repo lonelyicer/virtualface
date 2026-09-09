@@ -1,59 +1,61 @@
-//! ARKit 52 → Unified Expressions, ported from VRCFTPicoModule `Updater.cs`.
+//! PICO / ARKit-order weights → Unified Expressions.
+//! Ported from VRCFTPicoModule `Updater.cs`.
 
+use crate::remap::pico_to_arkit;
 use vf_abi::{UnifiedExpression as U, VF_VALID_EXPR, VF_VALID_EYE, VfUnifiedFrame};
 
-pub const A_EYE_BLINK_L: usize = 0;
-pub const A_EYE_LOOK_DOWN_L: usize = 1;
-pub const A_EYE_LOOK_IN_L: usize = 2;
-pub const A_EYE_LOOK_OUT_L: usize = 3;
-pub const A_EYE_LOOK_UP_L: usize = 4;
-pub const A_EYE_SQUINT_L: usize = 5;
-pub const A_EYE_WIDE_L: usize = 6;
-pub const A_EYE_BLINK_R: usize = 7;
-pub const A_EYE_LOOK_DOWN_R: usize = 8;
-pub const A_EYE_LOOK_IN_R: usize = 9;
-pub const A_EYE_LOOK_OUT_R: usize = 10;
-pub const A_EYE_LOOK_UP_R: usize = 11;
-pub const A_EYE_SQUINT_R: usize = 12;
-pub const A_EYE_WIDE_R: usize = 13;
-pub const A_JAW_FORWARD: usize = 14;
-pub const A_JAW_LEFT: usize = 15;
-pub const A_JAW_RIGHT: usize = 16;
-pub const A_JAW_OPEN: usize = 17;
-pub const A_MOUTH_CLOSE: usize = 18;
-pub const A_MOUTH_FUNNEL: usize = 19;
-pub const A_MOUTH_PUCKER: usize = 20;
-pub const A_MOUTH_LEFT: usize = 21;
-pub const A_MOUTH_RIGHT: usize = 22;
-pub const A_MOUTH_SMILE_L: usize = 23;
-pub const A_MOUTH_SMILE_R: usize = 24;
-pub const A_MOUTH_FROWN_L: usize = 25;
-pub const A_MOUTH_FROWN_R: usize = 26;
-pub const A_MOUTH_DIMPLE_L: usize = 27;
-pub const A_MOUTH_DIMPLE_R: usize = 28;
-pub const A_MOUTH_STRETCH_L: usize = 29;
-pub const A_MOUTH_STRETCH_R: usize = 30;
-pub const A_MOUTH_ROLL_LOWER: usize = 31;
-pub const A_MOUTH_ROLL_UPPER: usize = 32;
-pub const A_MOUTH_SHRUG_LOWER: usize = 33;
-pub const A_MOUTH_SHRUG_UPPER: usize = 34;
-pub const A_MOUTH_PRESS_L: usize = 35;
-pub const A_MOUTH_PRESS_R: usize = 36;
-pub const A_MOUTH_LOWER_DOWN_L: usize = 37;
-pub const A_MOUTH_LOWER_DOWN_R: usize = 38;
-pub const A_MOUTH_UPPER_UP_L: usize = 39;
-pub const A_MOUTH_UPPER_UP_R: usize = 40;
-pub const A_BROW_DOWN_L: usize = 41;
-pub const A_BROW_DOWN_R: usize = 42;
-pub const A_BROW_INNER_UP: usize = 43;
-pub const A_BROW_OUTER_UP_L: usize = 44;
-pub const A_BROW_OUTER_UP_R: usize = 45;
-pub const A_CHEEK_PUFF: usize = 46;
-pub const A_CHEEK_SQUINT_L: usize = 47;
-pub const A_CHEEK_SQUINT_R: usize = 48;
-pub const A_NOSE_SNEER_L: usize = 49;
-pub const A_NOSE_SNEER_R: usize = 50;
-pub const A_TONGUE_OUT: usize = 51;
+const A_EYE_BLINK_L: usize = 0;
+const A_EYE_LOOK_DOWN_L: usize = 1;
+const A_EYE_LOOK_IN_L: usize = 2;
+const A_EYE_LOOK_OUT_L: usize = 3;
+const A_EYE_LOOK_UP_L: usize = 4;
+const A_EYE_SQUINT_L: usize = 5;
+const A_EYE_WIDE_L: usize = 6;
+const A_EYE_BLINK_R: usize = 7;
+const A_EYE_LOOK_DOWN_R: usize = 8;
+const A_EYE_LOOK_IN_R: usize = 9;
+const A_EYE_LOOK_OUT_R: usize = 10;
+const A_EYE_LOOK_UP_R: usize = 11;
+const A_EYE_SQUINT_R: usize = 12;
+const A_EYE_WIDE_R: usize = 13;
+const A_JAW_FORWARD: usize = 14;
+const A_JAW_LEFT: usize = 15;
+const A_JAW_RIGHT: usize = 16;
+const A_JAW_OPEN: usize = 17;
+const A_MOUTH_CLOSE: usize = 18;
+const A_MOUTH_FUNNEL: usize = 19;
+const A_MOUTH_PUCKER: usize = 20;
+const A_MOUTH_LEFT: usize = 21;
+const A_MOUTH_RIGHT: usize = 22;
+const A_MOUTH_SMILE_L: usize = 23;
+const A_MOUTH_SMILE_R: usize = 24;
+const A_MOUTH_FROWN_L: usize = 25;
+const A_MOUTH_FROWN_R: usize = 26;
+const A_MOUTH_DIMPLE_L: usize = 27;
+const A_MOUTH_DIMPLE_R: usize = 28;
+const A_MOUTH_STRETCH_L: usize = 29;
+const A_MOUTH_STRETCH_R: usize = 30;
+const A_MOUTH_ROLL_LOWER: usize = 31;
+const A_MOUTH_ROLL_UPPER: usize = 32;
+const A_MOUTH_SHRUG_LOWER: usize = 33;
+const A_MOUTH_SHRUG_UPPER: usize = 34;
+const A_MOUTH_PRESS_L: usize = 35;
+const A_MOUTH_PRESS_R: usize = 36;
+const A_MOUTH_LOWER_DOWN_L: usize = 37;
+const A_MOUTH_LOWER_DOWN_R: usize = 38;
+const A_MOUTH_UPPER_UP_L: usize = 39;
+const A_MOUTH_UPPER_UP_R: usize = 40;
+const A_BROW_DOWN_L: usize = 41;
+const A_BROW_DOWN_R: usize = 42;
+const A_BROW_INNER_UP: usize = 43;
+const A_BROW_OUTER_UP_L: usize = 44;
+const A_BROW_OUTER_UP_R: usize = 45;
+const A_CHEEK_PUFF: usize = 46;
+const A_CHEEK_SQUINT_L: usize = 47;
+const A_CHEEK_SQUINT_R: usize = 48;
+const A_NOSE_SNEER_L: usize = 49;
+const A_NOSE_SNEER_R: usize = 50;
+const A_TONGUE_OUT: usize = 51;
 
 fn g(a: &[f32], i: usize) -> f32 {
     a.get(i).copied().unwrap_or(0.0)
@@ -65,13 +67,18 @@ fn set(f: &mut VfUnifiedFrame, e: U, v: f32) {
 
 /// Stateful bits matching Pico Updater (mouth L/R smoothing).
 #[derive(Default)]
-pub struct ArkitMapper {
+pub struct UeMapper {
     last_mouth_left: f32,
     last_mouth_right: f32,
 }
 
-impl ArkitMapper {
-    pub fn map(&mut self, arkit: &[f32], ts_us: u64) -> VfUnifiedFrame {
+impl UeMapper {
+    pub fn map_pico(&mut self, pico: &[f32], ts_us: u64) -> VfUnifiedFrame {
+        let arkit = pico_to_arkit(pico);
+        self.map_arkit(&arkit, ts_us)
+    }
+
+    pub fn map_arkit(&mut self, arkit: &[f32], ts_us: u64) -> VfUnifiedFrame {
         let mut f = VfUnifiedFrame::default();
         f.timestamp_us = ts_us;
         f.valid = VF_VALID_EYE | VF_VALID_EXPR;
@@ -217,54 +224,28 @@ impl ArkitMapper {
     }
 }
 
-use vf_sdk::{
-    Category, Host, Node, NodeDescriptor, NodeStatus, PortDesc, PortIo, ProcessCtx, Result,
-    SCHEMA_ARKIT52,
-};
-
-pub struct ArkitToUnified {
-    mapper: ArkitMapper,
-}
-
-impl Node for ArkitToUnified {
-    fn descriptor() -> NodeDescriptor {
-        NodeDescriptor::new("unified.arkit_to_ue", "ARKit → Unified", Category::Process)
-            .input(PortDesc::blendshapes("arkit", SCHEMA_ARKIT52, 52))
-            .output(PortDesc::unified("unified"))
-    }
-
-    fn create(_host: Host, _config: &serde_json::Value) -> Result<Self> {
-        Ok(Self {
-            mapper: ArkitMapper::default(),
-        })
-    }
-
-    fn process(&mut self, ctx: &ProcessCtx, io: &mut PortIo<'_>) -> Result<()> {
-        let arkit = io.input_blendshapes(0)?;
-        let mapped = self.mapper.map(arkit, ctx.now_us);
-        *io.output_unified_mut(0)? = mapped;
-        Ok(())
-    }
-
-    fn status(&self) -> NodeStatus {
-        NodeStatus::ok("ARKit → Unified Expressions")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn jaw_and_blink() {
+    fn pico_jaw_open_to_ue() {
+        let mut pico = [0f32; 72];
+        pico[7] = 0.8;
+        let f = UeMapper::default().map_pico(&pico, 0);
+        assert!((f.shape(U::JawOpen) - 0.8).abs() < 1e-6);
+        assert!(f.valid & VF_VALID_EYE != 0);
+    }
+
+    #[test]
+    fn arkit_blink_to_openness() {
         let mut a = [0f32; 52];
         a[A_JAW_OPEN] = 0.7;
         a[A_EYE_BLINK_L] = 0.2;
         a[A_EYE_BLINK_R] = 0.3;
-        let f = ArkitMapper::default().map(&a, 0);
+        let f = UeMapper::default().map_arkit(&a, 0);
         assert!((f.shape(U::JawOpen) - 0.7).abs() < 1e-5);
         assert!((f.eye.left.openness - 0.8).abs() < 1e-5);
         assert!((f.eye.right.openness - 0.7).abs() < 1e-5);
-        assert!(f.valid & VF_VALID_EYE != 0);
     }
 }

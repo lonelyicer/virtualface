@@ -7551,8 +7551,10 @@ name = "vf-ui"
 version = "0.1.0"
 dependencies = [
  "gpui-kit",
+ "image",
  "parking_lot",
  "serde_json",
+ "smallvec",
  "tracing",
  "vf-abi",
  "vf-core",

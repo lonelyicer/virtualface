@@ -4,7 +4,6 @@ use crate::registry::{NodeRegistry, NodeType};
 use libloading::Library;
 use std::ffi::c_void;
 use std::path::{Path, PathBuf};
-use tracing::{info, warn};
 use vf_abi::{VF_ABI_VERSION, VF_PLUGIN_ENTRY, VfPluginDescriptor, VfPluginEntry};
 
 pub struct LoadedPlugin {
@@ -64,12 +63,13 @@ impl PluginHost {
             }
             match self.load_one(&path, registry) {
                 Ok(id) => {
-                    let msg = format!("loaded plugin {id} from {}", path.display());
-                    info!(plugin = %id, path = %path.display(), "loaded plugin");
-                    self.log.log(2, None, msg);
+                    self.log.log(
+                        2,
+                        None,
+                        format!("loaded plugin {id} from {}", path.display()),
+                    );
                 }
                 Err(e) => {
-                    warn!(path = %path.display(), error = %e, "plugin load failed");
                     self.log.log(0, None, format!("{}: {e}", path.display()));
                     errors.push(format!("{}: {e}", path.display()));
                 }

@@ -1,12 +1,15 @@
 //! VirtualFace host: plugin loader, graph compiler, execution engine.
 
+pub mod builtins;
 pub mod engine;
 pub mod error;
 pub mod graph;
 pub mod instance;
 pub mod log;
 pub mod plugin;
+pub mod prefs;
 pub mod registry;
+pub mod vars;
 
 pub use engine::{EngineCommand, EngineHandle, spawn_engine};
 pub use error::{CoreError, Result};
@@ -14,9 +17,14 @@ pub use graph::{
     ExecPlan, Graph, GraphEdge, GraphNode, NodeId, PortRef, graph_from_json, graph_to_json,
 };
 pub use instance::{NodeSnap, Snapshot, SnapshotValue};
-pub use log::{LogBus, LogLine, level_name, now_us};
+pub use log::{LogBus, LogLine, format_ts, level_name, now_us, tracing_from_bus};
 pub use plugin::{LoadedPlugin, PluginHost, default_plugin_dirs};
+pub use prefs::{
+    absolute_path, config_dir, graph_display_name, last_graph_path, remember_last_graph,
+    with_graph_extension,
+};
 pub use registry::{NodeRegistry, NodeType, PortType};
+pub use vars::{GraphVar, VarType};
 
 use parking_lot::Mutex;
 use std::path::PathBuf;
@@ -43,6 +51,7 @@ impl Session {
     pub fn boot_with_log(plugin_dirs: &[PathBuf], graph: Option<Graph>, log: LogBus) -> Self {
         let mut host = PluginHost::new(log.clone());
         let mut registry = NodeRegistry::new();
+        crate::builtins::register_builtins(&mut registry);
         let load_errors = host.scan_and_load(plugin_dirs, &mut registry);
         for e in &load_errors {
             log.log(1, None, e.clone());
@@ -68,7 +77,7 @@ impl Session {
             registry,
             graph: Arc::new(Mutex::new(g)),
             load_errors,
-            graph_path: Mutex::new("examples/graphs/pico_to_vrchat.vfgraph.json".into()),
+            graph_path: Mutex::new(String::new()),
             host,
         }
     }

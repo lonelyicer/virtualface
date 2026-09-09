@@ -1,21 +1,23 @@
+use crate::ue::UeMapper;
 use vf_sdk::{
     Category, Host, Node, NodeDescriptor, NodeStatus, ParamDef, PortDesc, PortIo, ProcessCtx,
-    Result, SCHEMA_ARKIT52, param_f32,
+    Result, SCHEMA_VISEMES20, param_f32,
 };
 
-/// Generates a looping ARKit 52 signal for tests and UI demos (no hardware).
+/// Generates a looping Unified Expressions signal for tests and UI demos (no hardware).
 pub struct SyntheticSource {
     phase: f32,
     hz: f32,
     amplitude: f32,
+    mapper: UeMapper,
 }
 
 impl Node for SyntheticSource {
     fn descriptor() -> NodeDescriptor {
         NodeDescriptor::new("pico.synthetic", "Synthetic Face Source", Category::Input)
             .source()
-            .output(PortDesc::blendshapes("arkit", SCHEMA_ARKIT52, 52))
-            .output(PortDesc::blendshapes("visemes", "visemes20", 20))
+            .output(PortDesc::unified("unified"))
+            .output(PortDesc::blendshapes("visemes", SCHEMA_VISEMES20, 20))
             .output(PortDesc::float("timeout"))
             .param(ParamDef::float("hz", "Frequency", 0.4, 0.05, 5.0, 0.05))
             .param(ParamDef::float(
@@ -33,6 +35,7 @@ impl Node for SyntheticSource {
             phase: 0.0,
             hz: param_f32(config, "hz", 0.4),
             amplitude: param_f32(config, "amplitude", 0.8),
+            mapper: UeMapper::default(),
         })
     }
 
@@ -40,20 +43,16 @@ impl Node for SyntheticSource {
         self.phase += ctx.dt_secs() * self.hz * std::f32::consts::TAU;
         let s = (self.phase.sin() * 0.5 + 0.5) * self.amplitude;
         let c = (self.phase.cos() * 0.5 + 0.5) * self.amplitude;
-        let out = io.output_blendshapes_mut(0)?;
-        // blink / jaw / smile / brow
-        if out.len() >= 52 {
-            out.fill(0.0);
-            out[0] = (1.0 - s).clamp(0.0, 1.0) * 0.15; // blink L
-            out[7] = (1.0 - s).clamp(0.0, 1.0) * 0.15;
-            out[17] = s; // jawOpen
-            out[23] = c; // smile L
-            out[24] = c;
-            out[43] = s * 0.5; // brow inner
-            out[4] = (self.phase.sin()) * 0.2; // look up L (can be negative — clamp)
-            out[4] = out[4].max(0.0);
-            out[11] = out[4];
-        }
+        let mut arkit = [0f32; 52];
+        arkit[0] = (1.0 - s).clamp(0.0, 1.0) * 0.15;
+        arkit[7] = (1.0 - s).clamp(0.0, 1.0) * 0.15;
+        arkit[17] = s;
+        arkit[23] = c;
+        arkit[24] = c;
+        arkit[43] = s * 0.5;
+        arkit[4] = (self.phase.sin() * 0.2).max(0.0);
+        arkit[11] = arkit[4];
+        *io.output_unified_mut(0)? = self.mapper.map_arkit(&arkit, ctx.now_us);
         let vis = io.output_blendshapes_mut(1)?;
         vis.fill(0.0);
         if !vis.is_empty() {

@@ -1,5 +1,6 @@
 use crate::error::{CoreError, Result};
 use crate::registry::NodeRegistry;
+use crate::vars::GraphVar;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use vf_abi::ports_compatible;
@@ -47,6 +48,8 @@ pub struct Graph {
     pub edges: Vec<GraphEdge>,
     #[serde(default)]
     pub next_id: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variables: Vec<GraphVar>,
 }
 
 fn default_rate() -> f32 {
@@ -61,6 +64,7 @@ impl Default for Graph {
             nodes: vec![],
             edges: vec![],
             next_id: 1,
+            variables: vec![],
         }
     }
 }
@@ -119,20 +123,25 @@ impl Graph {
             .outputs
             .get(from.port as usize)
             .ok_or_else(|| CoreError::Graph("unknown output port".into()))?;
-        let dp = dst_ty
-            .inputs
-            .get(to.port as usize)
-            .ok_or_else(|| CoreError::Graph("unknown input port".into()))?;
-        if !ports_compatible(
-            sp.value_tag(),
-            Some(&sp.schema),
-            dp.value_tag(),
-            Some(&dp.schema),
-        ) {
-            return Err(CoreError::Graph(format!(
-                "incompatible ports {} -> {}",
-                sp.name, dp.name
-            )));
+        if let Some(dp) = dst_ty.inputs.get(to.port as usize) {
+            if !ports_compatible(
+                sp.value_tag(),
+                Some(&sp.schema),
+                dp.value_tag(),
+                Some(&dp.schema),
+            ) {
+                return Err(CoreError::Graph(format!(
+                    "incompatible ports {} -> {}",
+                    sp.name, dp.name
+                )));
+            }
+        } else {
+            let Some(tag) = dst_ty.input_tag(to.port) else {
+                return Err(CoreError::Graph("unknown input port".into()));
+            };
+            if !ports_compatible(sp.value_tag(), Some(&sp.schema), tag, None) {
+                return Err(CoreError::Graph("incompatible param pin".into()));
+            }
         }
         if self.edges.iter().any(|e| e.to == to) {
             return Err(CoreError::Graph("input port already connected".into()));
@@ -154,8 +163,16 @@ impl Graph {
         self.edges.retain(|e| e.to != to);
     }
 
+    pub fn disconnect_from(&mut self, from: PortRef) {
+        self.edges.retain(|e| e.from != from);
+    }
+
     pub fn disconnect_edge(&mut self, from: PortRef, to: PortRef) {
         self.edges.retain(|e| !(e.from == from && e.to == to));
+    }
+
+    pub fn source_of(&self, to: PortRef) -> Option<PortRef> {
+        self.edges.iter().find(|e| e.to == to).map(|e| e.from)
     }
 
     pub fn toposort(&self, _registry: &NodeRegistry) -> Result<Vec<NodeId>> {
@@ -191,12 +208,81 @@ impl Graph {
     pub fn used_ids(&self) -> HashSet<NodeId> {
         self.nodes.iter().map(|n| n.id).collect()
     }
+
+    pub fn var(&self, name: &str) -> Option<&GraphVar> {
+        self.variables.iter().find(|v| v.name == name)
+    }
+
+    pub fn var_mut(&mut self, name: &str) -> Option<&mut GraphVar> {
+        self.variables.iter_mut().find(|v| v.name == name)
+    }
+
+    pub fn add_variable(&mut self, name: String, ty: crate::vars::VarType) -> String {
+        let name = crate::vars::unique_var_name(&self.variables, &name);
+        self.variables.push(GraphVar::new(name.clone(), ty));
+        name
+    }
+
+    pub fn remove_variable(&mut self, name: &str) {
+        self.variables.retain(|v| v.name != name);
+        let drop_ids: Vec<NodeId> = self
+            .nodes
+            .iter()
+            .filter(|n| {
+                crate::vars::VarType::from_type_id(&n.type_id).is_some()
+                    && n.params.get("name").and_then(|v| v.as_str()) == Some(name)
+            })
+            .map(|n| n.id)
+            .collect();
+        for id in drop_ids {
+            self.remove_node(id);
+        }
+    }
+
+    pub fn update_variable(
+        &mut self,
+        old: &str,
+        name: String,
+        ty: crate::vars::VarType,
+        value: serde_json::Value,
+    ) -> String {
+        let sanitized = crate::vars::sanitize_var_name(&name);
+        let new_name = if sanitized == old {
+            old.to_string()
+        } else {
+            crate::vars::unique_var_name(&self.variables, &name)
+        };
+        if let Some(v) = self.variables.iter_mut().find(|v| v.name == old) {
+            v.name = new_name.clone();
+            v.ty = ty;
+            v.value = value;
+        }
+        for n in &mut self.nodes {
+            let Some((is_get, _)) = crate::vars::VarType::from_type_id(&n.type_id) else {
+                continue;
+            };
+            if n.params.get("name").and_then(|v| v.as_str()) != Some(old) {
+                continue;
+            }
+            if let Some(obj) = n.params.as_object_mut() {
+                obj.insert("name".into(), serde_json::json!(new_name.clone()));
+            }
+            n.type_id = if is_get {
+                ty.get_type_id()
+            } else {
+                ty.set_type_id()
+            }
+            .into();
+        }
+        new_name
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct NodeBinding {
     pub type_id: String,
     pub inputs: Vec<Option<PortRef>>,
+    pub param_inputs: Vec<(String, PortRef)>,
     pub n_in: usize,
     pub n_out: usize,
 }
@@ -218,9 +304,12 @@ impl Graph {
             }
             let ty = registry.get(&n.type_id).unwrap();
             let mut inputs = vec![None; ty.inputs.len()];
+            let mut param_inputs = Vec::new();
             for e in self.incoming(n.id) {
                 if (e.to.port as usize) < inputs.len() {
                     inputs[e.to.port as usize] = Some(e.from);
+                } else if let Some(key) = ty.param_key_for_port(e.to.port) {
+                    param_inputs.push((key.to_string(), e.from));
                 }
             }
             bindings.insert(
@@ -228,6 +317,7 @@ impl Graph {
                 NodeBinding {
                     type_id: n.type_id.clone(),
                     inputs,
+                    param_inputs,
                     n_in: ty.inputs.len(),
                     n_out: ty.outputs.len(),
                 },
@@ -401,6 +491,7 @@ mod tests {
                 missing: false,
             }],
             edges: vec![],
+            variables: vec![],
         };
         let s = graph_to_json(&g).unwrap();
         let g2 = graph_from_json(&s).unwrap();

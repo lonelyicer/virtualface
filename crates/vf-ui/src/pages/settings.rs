@@ -10,48 +10,13 @@ impl Workspace {
         let rate = self.session.graph.lock().rate_hz;
         v_flex()
             .id("settings-page")
+            .flex_1()
             .size_full()
             .min_w(px(0.))
+            .min_h(px(0.))
             .p_6()
             .gap_4()
             .overflow_y_scroll()
-            .child(
-                div()
-                    .text_lg()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("设置"),
-            )
-            .child(
-                GroupBox::new()
-                    .id("set-graph")
-                    .outline()
-                    .title("图文件")
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted)
-                            .child(self.graph_path.clone()),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(
-                                Button::new("set-open")
-                                    .label("打开")
-                                    .on_click(cx.listener(|this, _, _, cx| this.open_graph(cx))),
-                            )
-                            .child(
-                                Button::new("set-save")
-                                    .label("保存")
-                                    .on_click(cx.listener(|this, _, _, cx| this.save_graph(cx))),
-                            )
-                            .child(
-                                Button::new("set-reload")
-                                    .label("重新编译")
-                                    .on_click(cx.listener(|this, _, _, cx| this.reload_graph(cx))),
-                            ),
-                    ),
-            )
             .child(
                 GroupBox::new()
                     .id("set-engine")

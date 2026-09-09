@@ -1,9 +1,9 @@
 //! VirtualFace gpui-kit UI.
 
-mod canvas;
 mod chrome;
+mod flow;
 mod page;
-mod pages;
+pub(crate) mod pages;
 mod theme;
 mod workspace;
 

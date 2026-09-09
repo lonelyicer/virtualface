@@ -1,4 +1,4 @@
-//! Headless synthetic → ARKit map → OSC, if plugin cdylibs are present.
+//! Headless synthetic Unified → OSC, if plugin cdylibs are present.
 
 use std::net::UdpSocket;
 use std::path::PathBuf;
@@ -36,7 +36,7 @@ fn loads_example_plugins() {
         "pico.synthetic missing; dirs={:?} types={types:?}",
         plugin_dirs()
     );
-    assert!(types.iter().any(|t| t == "unified.arkit_to_ue"));
+    assert!(types.iter().any(|t| t == "unified.one_euro"));
     assert!(types.iter().any(|t| t == "vrc.osc_output"));
 }
 
@@ -49,10 +49,7 @@ fn synthetic_to_osc_if_plugins_built() {
         .iter()
         .map(|t| t.type_id.clone())
         .collect();
-    if !types.iter().any(|t| t == "pico.synthetic")
-        || !types.iter().any(|t| t == "unified.arkit_to_ue")
-        || !types.iter().any(|t| t == "vrc.osc_output")
-    {
+    if !types.iter().any(|t| t == "pico.synthetic") || !types.iter().any(|t| t == "vrc.osc_output") {
         eprintln!("skip e2e: plugins not loaded ({types:?})");
         return;
     }
@@ -76,15 +73,6 @@ fn synthetic_to_osc_if_plugins_built() {
         },
         GraphNode {
             id: NodeId(2),
-            type_id: "unified.arkit_to_ue".into(),
-            x: 200.0,
-            y: 0.0,
-            params: serde_json::json!({}),
-            state: None,
-            missing: false,
-        },
-        GraphNode {
-            id: NodeId(3),
             type_id: "vrc.osc_output".into(),
             x: 400.0,
             y: 0.0,
@@ -99,29 +87,17 @@ fn synthetic_to_osc_if_plugins_built() {
             missing: false,
         },
     ];
-    g.edges = vec![
-        GraphEdge {
-            from: PortRef {
-                node: NodeId(1),
-                port: 0,
-            },
-            to: PortRef {
-                node: NodeId(2),
-                port: 0,
-            },
+    g.edges = vec![GraphEdge {
+        from: PortRef {
+            node: NodeId(1),
+            port: 0,
         },
-        GraphEdge {
-            from: PortRef {
-                node: NodeId(2),
-                port: 0,
-            },
-            to: PortRef {
-                node: NodeId(3),
-                port: 0,
-            },
+        to: PortRef {
+            node: NodeId(2),
+            port: 0,
         },
-    ];
-    g.next_id = 4;
+    }];
+    g.next_id = 3;
     *session.graph.lock() = g;
     session.recompile();
     session.engine.start();

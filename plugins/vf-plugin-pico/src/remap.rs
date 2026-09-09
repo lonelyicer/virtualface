@@ -59,7 +59,7 @@ pub const PICO_TO_ARKIT: [Option<usize>; 52] = [
     Some(51), // 51 TongueOut
 ];
 
-pub fn pico_to_arkit(pico: &[f32]) -> [f32; ARKIT_BLENDSHAPE_COUNT as usize] {
+pub(crate) fn pico_to_arkit(pico: &[f32]) -> [f32; ARKIT_BLENDSHAPE_COUNT as usize] {
     let mut out = [0f32; ARKIT_BLENDSHAPE_COUNT as usize];
     for (pico_i, dst) in PICO_TO_ARKIT.iter().enumerate() {
         if let Some(ai) = *dst {

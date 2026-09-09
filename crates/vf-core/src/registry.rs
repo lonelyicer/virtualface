@@ -1,7 +1,7 @@
 use crate::error::{CoreError, Result};
 use serde::{Deserialize, Serialize};
 use vf_abi::{VfNodeDescriptor, VfNodeVTable, VfPortDesc, VfValueTag};
-use vf_sdk::{Category, ParamDef};
+use vf_sdk::{Category, ParamDef, ParamKind};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PortType {
@@ -59,6 +59,50 @@ impl NodeType {
     pub fn is_source(&self) -> bool {
         self.flags & vf_abi::VF_NODE_IS_SOURCE != 0
             || (self.inputs.is_empty() && matches!(self.category, Category::Input))
+    }
+
+    pub fn pin_params(&self) -> impl Iterator<Item = &ParamDef> {
+        self.params.iter().filter(|p| p.kind != ParamKind::Button)
+    }
+
+    pub fn left_pin_count(&self) -> usize {
+        self.inputs.len() + self.pin_params().count()
+    }
+
+    pub fn param_kind_tag(kind: ParamKind) -> Option<VfValueTag> {
+        match kind {
+            ParamKind::Float => Some(VfValueTag::Float),
+            ParamKind::Int => Some(VfValueTag::Int),
+            ParamKind::Bool => Some(VfValueTag::Bool),
+            ParamKind::String => Some(VfValueTag::Bytes),
+            _ => None,
+        }
+    }
+
+    pub fn input_tag(&self, port: u32) -> Option<VfValueTag> {
+        if let Some(p) = self.inputs.get(port as usize) {
+            return Some(p.value_tag());
+        }
+        let i = (port as usize).checked_sub(self.inputs.len())?;
+        let p = self.pin_params().nth(i)?;
+        Self::param_kind_tag(p.kind)
+    }
+
+    pub fn param_key_for_port(&self, port: u32) -> Option<&str> {
+        let i = (port as usize).checked_sub(self.inputs.len())?;
+        self.pin_params().nth(i).map(|p| p.key.as_str())
+    }
+
+    pub fn param_def_for_port(&self, port: u32) -> Option<&ParamDef> {
+        let i = (port as usize).checked_sub(self.inputs.len())?;
+        self.pin_params().nth(i)
+    }
+
+    pub fn input_is_wirable(&self, port: u32) -> bool {
+        if (port as usize) < self.inputs.len() {
+            return true;
+        }
+        self.input_tag(port).is_some()
     }
 
     pub unsafe fn from_c(plugin_id: &str, plugin_name: &str, d: &VfNodeDescriptor) -> Result<Self> {

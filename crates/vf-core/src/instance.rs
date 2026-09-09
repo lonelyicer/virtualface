@@ -221,6 +221,15 @@ pub fn snapshot_value(v: &VfValue) -> SnapshotValue {
             let sl = unsafe { buf.as_slice() };
             SnapshotValue::Blendshapes(sl.to_vec())
         }
+        VfValueTag::Bytes => {
+            let b = unsafe { v.payload.bytes };
+            if b.ptr.is_null() || b.len == 0 {
+                SnapshotValue::Text(String::new())
+            } else {
+                let sl = unsafe { std::slice::from_raw_parts(b.ptr, b.len as usize) };
+                SnapshotValue::Text(String::from_utf8_lossy(sl).into_owned())
+            }
+        }
         _ => SnapshotValue::Empty,
     }
 }
@@ -235,6 +244,7 @@ pub enum SnapshotValue {
     Vec3([f32; 3]),
     Unified(VfUnifiedFrame),
     Blendshapes(Vec<f32>),
+    Text(String),
 }
 
 impl SnapshotValue {
@@ -257,6 +267,13 @@ impl SnapshotValue {
                 let n = s.len().min(4);
                 let body: Vec<String> = s[..n].iter().map(|v| format!("{v:.2}")).collect();
                 format!("[{} …] n={}", body.join(", "), s.len())
+            }
+            Self::Text(s) => {
+                if s.chars().count() > 24 {
+                    format!("{}…", s.chars().take(24).collect::<String>())
+                } else {
+                    s.clone()
+                }
             }
         }
     }

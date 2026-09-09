@@ -15,7 +15,7 @@ The host is a graph runner. Face-tracking semantics live in plugins.
 Example plugins (one crate may export any mix of node categories):
 
 - `vf-plugin-pico` — `pico.udp_source`, `pico.synthetic`
-- `vf-plugin-unified` — ARKit→UE, calibration, 1€ filter, merge, shape math, correctors
+- `vf-plugin-unified` — calibration, 1€ filter, merge, shape math, correctors
 - `vf-plugin-vrc-osc` — VRChat `v2/*` OSC, raw float OSC
 
 ## Plugin ABI

@@ -1,10 +1,18 @@
+mod log_layer;
+
 use clap::Parser;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tracing_subscriber::EnvFilter;
-use vf_core::{Graph, PluginHost, Session, default_plugin_dirs, graph_from_json};
+use tracing_subscriber::prelude::*;
+use vf_core::{
+    Graph, LogBus, PluginHost, Session, absolute_path, default_plugin_dirs, graph_from_json,
+    last_graph_path, remember_last_graph,
+};
+
+use crate::log_layer::LogBusLayer;
 
 #[derive(Parser, Debug)]
 #[command(name = "virtualface", about = "Plugin-based face tracking host")]
@@ -24,47 +32,71 @@ struct Cli {
 }
 
 fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
+    let log = LogBus::new();
+    tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
+        .with(tracing_subscriber::fmt::layer())
+        .with(
+            LogBusLayer::new(log.clone()).with_filter(
+                EnvFilter::new("info")
+                    .add_directive("virtualface=info".parse().unwrap())
+                    .add_directive("vf_core=info".parse().unwrap())
+                    .add_directive("vf_ui=info".parse().unwrap())
+                    .add_directive("gpui=warn".parse().unwrap())
+                    .add_directive("gpui_kit=warn".parse().unwrap()),
+            ),
+        )
         .init();
 
     let cli = Cli::parse();
     let mut dirs = cli.plugins_dir.clone();
     dirs.extend(default_plugin_dirs());
 
-    let mut loaded = match &cli.graph {
-        Some(path) => match std::fs::read_to_string(path) {
+    let startup_path = cli.graph.clone().or_else(last_graph_path);
+    let mut loaded = Graph::default();
+    let mut resolved_path = None;
+    if let Some(path) = startup_path {
+        match std::fs::read_to_string(&path) {
             Ok(s) => match graph_from_json(&s) {
-                Ok(g) => g,
+                Ok(g) => {
+                    loaded = g;
+                    resolved_path = Some(path);
+                }
                 Err(e) => {
-                    tracing::error!(file = %path.display(), error = %e, "failed to parse graph");
-                    Graph::default()
+                    log.log(
+                        0,
+                        None,
+                        format!("failed to parse graph {}: {e}", path.display()),
+                    );
                 }
             },
             Err(e) => {
-                tracing::error!(file = %path.display(), error = %e, "failed to read graph");
-                Graph::default()
+                log.log(
+                    0,
+                    None,
+                    format!("failed to read graph {}: {e}", path.display()),
+                );
             }
-        },
-        None => Graph::default(),
-    };
+        }
+    }
     if cli.rate > 0.0 {
         loaded.rate_hz = cli.rate;
     }
 
-    let session = Session::boot(&dirs, Some(loaded));
-    if let Some(path) = &cli.graph {
-        *session.graph_path.lock() = path.display().to_string();
+    let session = Session::boot_with_log(&dirs, Some(loaded), log);
+    if let Some(path) = resolved_path {
+        *session.graph_path.lock() = absolute_path(&path).display().to_string();
+        remember_last_graph(&path);
     }
-    tracing::info!(
-        plugins = session.host.plugins().len(),
-        nodes = session.registry.all().len(),
-        "session ready"
-    );
+    let graph_label = session.graph_path.lock().clone();
     session.host.log.log(
         2,
         None,
-        format!("graph {}", session.graph_path.lock().clone()),
+        if graph_label.is_empty() {
+            "graph (untitled)".into()
+        } else {
+            format!("graph {graph_label}")
+        },
     );
 
     if cli.headless {
@@ -79,12 +111,19 @@ fn run_headless(session: Session) {
     let stop = Arc::new(AtomicBool::new(false));
     let s2 = stop.clone();
     let _ = ctrlc::set_handler(move || s2.store(true, Ordering::SeqCst));
-    tracing::info!("headless engine running — Ctrl+C to stop");
+    session
+        .host
+        .log
+        .log(2, None, "headless engine running — Ctrl+C to stop");
     while !stop.load(Ordering::Relaxed) {
         std::thread::sleep(Duration::from_millis(200));
         let snap = session.engine.snapshot();
         if snap.tick % 100 == 0 && snap.tick > 0 {
-            tracing::info!(tick = snap.tick, drops = snap.drops, "engine");
+            session.host.log.log(
+                2,
+                None,
+                format!("engine tick={} drops={}", snap.tick, snap.drops),
+            );
         }
     }
     session.engine.stop();
@@ -100,7 +139,6 @@ fn run_gui(session: Session) {
     });
 }
 
-// keep PluginHost referenced for docs
 #[allow(dead_code)]
 fn _host() -> PluginHost {
     PluginHost::new(vf_core::LogBus::new())
