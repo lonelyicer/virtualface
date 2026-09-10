@@ -81,6 +81,7 @@ fn synthetic_to_osc_if_plugins_built() {
                 "port": port,
                 "prefix": "/avatar/parameters/",
                 "send_all": true,
+                "oscquery": false,
                 "binary_bits": 0
             }),
             state: None,

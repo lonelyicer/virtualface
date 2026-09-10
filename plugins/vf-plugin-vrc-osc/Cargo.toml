@@ -16,3 +16,4 @@ vf-abi.workspace = true
 rosc.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+socket2 = "0.5"
