@@ -1,3 +1,6 @@
+use crate::i18n::{T, t};
+use gpui_kit::{App, SharedString};
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AppPage {
     Home,
@@ -7,12 +10,15 @@ pub(crate) enum AppPage {
 }
 
 impl AppPage {
-    pub(crate) fn title(self) -> &'static str {
-        match self {
-            Self::Home => "主页",
-            Self::Graph => "节点图",
-            Self::Settings => "设置",
-            Self::Log => "日志",
-        }
+    pub(crate) fn title(self, cx: &App) -> SharedString {
+        t(
+            cx,
+            match self {
+                Self::Home => T::NavHome,
+                Self::Graph => T::NavGraph,
+                Self::Settings => T::NavSettings,
+                Self::Log => T::NavLog,
+            },
+        )
     }
 }

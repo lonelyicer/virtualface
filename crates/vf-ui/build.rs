@@ -1,34 +1,36 @@
-//! Fedora's `libxkbcommon-x11` runtime package ships `libxkbcommon-x11.so.0`
-//! but not the unversioned `libxkbcommon-x11.so` linker name (that lives in
-//! `-devel`). gpui's X11 backend still passes `-lxkbcommon-x11`. Point rustc
-//! at a search dir that has that name so the GUI crate links without extra
-//! packages. Harmless on systems that already have the devel symlink.
+use std::fs;
+use std::path::PathBuf;
 
 fn main() {
-    println!("cargo:rerun-if-changed=build.rs");
-    #[cfg(target_os = "linux")]
-    linux_xkbcommon_x11();
-}
+    let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let locales = manifest.join("locales");
+    println!("cargo:rerun-if-changed=locales");
 
-#[cfg(target_os = "linux")]
-fn linux_xkbcommon_x11() {
-    let src = std::path::Path::new("/lib64/libxkbcommon-x11.so.0");
-    let src = if src.exists() {
-        src
-    } else {
-        std::path::Path::new("/usr/lib64/libxkbcommon-x11.so.0")
-    };
-    if !src.exists() {
-        return;
+    let mut files: Vec<PathBuf> = fs::read_dir(&locales)
+        .unwrap_or_else(|e| panic!("read {}: {e}", locales.display()))
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+        .collect();
+    files.sort();
+    assert!(
+        !files.is_empty(),
+        "no locale JSON files in {}",
+        locales.display()
+    );
+
+    let mut out = String::from("pub const LOCALE_FILES: &[(&str, &str)] = &[\n");
+    for path in &files {
+        let id = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .expect("locale filename");
+        let name = path.file_name().and_then(|s| s.to_str()).unwrap();
+        out.push_str(&format!(
+            "    (\"{id}\", include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/locales/{name}\"))),\n"
+        ));
     }
-    let out = std::env::var("OUT_DIR").expect("OUT_DIR");
-    let dest = std::path::Path::new(&out).join("libxkbcommon-x11.so");
-    if dest.exists() {
-        let _ = std::fs::remove_file(&dest);
-    }
-    #[cfg(unix)]
-    {
-        let _ = std::os::unix::fs::symlink(src, &dest);
-    }
-    println!("cargo:rustc-link-search=native={out}");
+    out.push_str("];\n");
+
+    let dest = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("locale_files.rs");
+    fs::write(&dest, out).expect("write locale_files.rs");
 }

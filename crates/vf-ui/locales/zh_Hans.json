@@ -1,0 +1,86 @@
+{
+  "meta": {
+    "name": "简体中文",
+    "aliases": ["zh", "zh_CN", "zh-Hans"]
+  },
+  "nav": {
+    "home": "主页",
+    "graph": "节点图",
+    "settings": "设置",
+    "log": "日志"
+  },
+  "home": {
+    "status": "状态",
+    "engine": "引擎",
+    "running": "运行中",
+    "stopped": "已停止",
+    "tick": "Tick",
+    "drops": "丢帧",
+    "rate": "频率",
+    "start": "启动",
+    "stop": "停止",
+    "graph": "节点图",
+    "graph_name": "图  {name}",
+    "graph_stats": "节点 {nodes}  ·  连线 {edges}  ·  缺失插件 {missing}",
+    "plugins": "插件",
+    "plugins_loaded": "已加载 {plugins} 个插件，{types} 种节点",
+    "node_status": "节点状态",
+    "graph_empty": "图是空的，到节点图添加节点"
+  },
+  "settings": {
+    "engine_rate": "引擎频率",
+    "plugins": "已加载插件",
+    "language": "语言"
+  },
+  "graph": {
+    "save": "保存",
+    "load": "加载",
+    "export": "导出",
+    "load_prompt": "加载图",
+    "search": "搜索",
+    "variables": "变量",
+    "vars_hint": "拖入画布使用",
+    "create_var": "创建变量",
+    "edit_var": "编辑变量",
+    "cancel": "取消",
+    "ok": "确认",
+    "name": "名称",
+    "type": "类型",
+    "value": "值",
+    "invalid_value": "变量值无效",
+    "unnamed": "未命名",
+    "get_var": "获取 {name}",
+    "set_var": "设置 {name}",
+    "plugin_missing": "插件缺失",
+    "missing_node": "缺失: {id}",
+    "incompatible_ports": "端口不兼容"
+  },
+  "category": {
+    "input": "输入",
+    "process": "处理",
+    "output": "输出",
+    "utility": "工具"
+  },
+  "log": {
+    "empty": "暂无日志"
+  },
+  "status": {
+    "ready": "就绪",
+    "running": "运行中",
+    "stopped": "已停止",
+    "saved": "已保存 {path}",
+    "save_failed": "保存失败: {err}",
+    "loaded": "已加载 {path}",
+    "load_failed": "加载失败: {err}",
+    "open_failed": "打开失败: {err}",
+    "export_failed": "导出失败: {err}",
+    "tick_rate": "频率 {rate} Hz",
+    "variable": "变量 {name}"
+  },
+  "type": {
+    "float": "Float",
+    "int": "Int",
+    "bool": "Bool",
+    "string": "String"
+  }
+}

@@ -1,6 +1,8 @@
+use crate::i18n::{T, t};
 use crate::workspace::Workspace;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
+use gpui_kit::component::select::Select;
 use gpui_kit::component::{Sizable, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::*;
@@ -19,9 +21,23 @@ impl Workspace {
             .overflow_y_scroll()
             .child(
                 GroupBox::new()
+                    .id("set-language")
+                    .outline()
+                    .title(t(cx, T::SettingsLanguage))
+                    .child(
+                        div().w(px(240.)).child(
+                            Select::new(&self.language_select)
+                                .id("settings-language")
+                                .w_full()
+                                .menu_width(px(240.)),
+                        ),
+                    ),
+            )
+            .child(
+                GroupBox::new()
                     .id("set-engine")
                     .outline()
-                    .title("引擎频率")
+                    .title(t(cx, T::SettingsEngineRate))
                     .child(
                         h_flex()
                             .gap_2()
@@ -43,7 +59,7 @@ impl Workspace {
                 GroupBox::new()
                     .id("set-plugins")
                     .outline()
-                    .title("已加载插件")
+                    .title(t(cx, T::SettingsPlugins))
                     .children(self.session.host.plugins().iter().map(|p| {
                         v_flex()
                             .gap_1()

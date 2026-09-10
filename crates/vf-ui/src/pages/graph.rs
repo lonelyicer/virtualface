@@ -2,13 +2,16 @@ use crate::flow::{
     self, FlowEdge, ParamRow, collect_edges, hit_node, hit_port, node_intersects, node_layout,
     paint_background, paint_edge, paint_marquee, ports_ok, snapshot_node, try_connect,
 };
+use crate::i18n::{Locale, T, category_key, locale, t, t_loc, tf, tf_loc, var_type_key};
 use crate::theme::{
     Camera, Drag, EDITOR_H, HEADER_H, NODE_W, Vec2, category_color, latest_snapshot,
 };
 use crate::workspace::{AddMenu, VarDialog, Workspace};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::{Sizable, h_flex, v_flex};
+use gpui_kit::component::searchable_list::SearchableListItem;
+use gpui_kit::component::select::{SearchableVec, Select, SelectEvent, SelectState};
+use gpui_kit::component::{IndexPath, Sizable, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 use std::collections::HashSet;
@@ -51,10 +54,88 @@ impl Render for VarDragGhost {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct VarTypeChoice {
+    ty: VarType,
+    title: SharedString,
+}
+
+impl SearchableListItem for VarTypeChoice {
+    type Value = VarType;
+
+    fn title(&self) -> SharedString {
+        self.title.clone()
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self.ty
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct BoolChoice(bool);
+
+impl SearchableListItem for BoolChoice {
+    type Value = BoolChoice;
+
+    fn title(&self) -> SharedString {
+        SharedString::from(if self.0 { "true" } else { "false" })
+    }
+
+    fn value(&self) -> &Self::Value {
+        self
+    }
+}
+
 pub(crate) struct VarCreateForm {
     name: Entity<InputState>,
     value: Entity<InputState>,
     ty: VarType,
+    type_select: Entity<SelectState<SearchableVec<VarTypeChoice>>>,
+    bool_select: Entity<SelectState<SearchableVec<BoolChoice>>>,
+    _type_sub: Option<Subscription>,
+}
+
+impl VarCreateForm {
+    fn apply_type(&mut self, ty: VarType, window: &mut Window, cx: &mut Context<Self>) {
+        if self.ty == ty {
+            return;
+        }
+        self.ty = ty;
+        if ty == VarType::Bool {
+            self.bool_select.update(cx, |s, cx| {
+                s.set_selected_value(&BoolChoice(false), window, cx);
+            });
+        } else {
+            self.value.update(cx, |s, cx| {
+                s.set_value(default_value_str(ty), window, cx);
+            });
+        }
+        cx.notify();
+    }
+
+    fn current_ty(&self, cx: &App) -> VarType {
+        self.type_select
+            .read(cx)
+            .selected_value()
+            .copied()
+            .unwrap_or(self.ty)
+    }
+
+    fn current_value(&self, cx: &App) -> Option<serde_json::Value> {
+        let ty = self.current_ty(cx);
+        if ty == VarType::Bool {
+            let b = self
+                .bool_select
+                .read(cx)
+                .selected_value()
+                .map(|c| c.0)
+                .unwrap_or(false);
+            Some(serde_json::json!(b))
+        } else {
+            parse_var_value(ty, &self.value.read(cx).value())
+        }
+    }
 }
 
 impl Render for VarCreateForm {
@@ -63,39 +144,37 @@ impl Render for VarCreateForm {
         v_flex()
             .gap_2()
             .w_full()
-            .child(div().text_xs().child("名称"))
+            .child(div().text_xs().child(t(cx, T::GraphName)))
             .child(Input::new(&self.name).id("var-create-name"))
-            .child(div().text_xs().child("类型"))
-            .child(h_flex().gap_1().flex_wrap().children(VarType::ALL.map(|t| {
-                div()
-                    .id(SharedString::from(format!("var-create-ty-{}", t.label())))
-                    .px_2()
-                    .py_1()
-                    .rounded_sm()
-                    .border_1()
-                    .cursor_pointer()
-                    .when(ty == t, |d| {
-                        d.border_color(rgb(t.color()))
-                            .bg(rgb(t.color()).opacity(0.25))
-                    })
-                    .when(ty != t, |d| d.border_color(rgb(0x3f3f46)).bg(rgb(0x27272a)))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.ty = t;
-                        this.value.update(cx, |s, cx| {
-                            s.set_value(default_value_str(t), window, cx);
-                        });
-                        cx.notify();
-                    }))
-                    .child(div().text_xs().child(t.label()))
-            })))
-            .child(div().text_xs().child("值"))
-            .child(Input::new(&self.value).id("var-create-value"))
+            .child(div().text_xs().child(t(cx, T::GraphType)))
+            .child(
+                div().w_full().child(
+                    Select::new(&self.type_select)
+                        .id("var-create-type")
+                        .small()
+                        .w_full(),
+                ),
+            )
+            .child(div().text_xs().child(t(cx, T::GraphValue)))
+            .when(ty == VarType::Bool, |d| {
+                d.child(
+                    div().w_full().child(
+                        Select::new(&self.bool_select)
+                            .id("var-create-bool")
+                            .small()
+                            .w_full(),
+                    ),
+                )
+            })
+            .when(ty != VarType::Bool, |d| {
+                d.child(Input::new(&self.value).id("var-create-value"))
+            })
     }
 }
 
 #[derive(Clone)]
 enum MenuEntry {
-    Header(&'static str),
+    Header(String),
     Place {
         type_id: String,
         label: String,
@@ -214,7 +293,7 @@ impl Workspace {
         self.sync_primary();
     }
 
-    fn finish_wire(&mut self, from: PortRef, output: bool, pos: Point<Pixels>) {
+    fn finish_wire(&mut self, from: PortRef, output: bool, pos: Point<Pixels>, cx: &App) {
         let world = self.world_of(pos);
         let graph = self.session.graph.lock().clone();
         for n in &graph.nodes {
@@ -242,7 +321,7 @@ impl Workspace {
                     self.status = e;
                 }
             } else {
-                self.status = "incompatible ports".into();
+                self.status = t(cx, T::IncompatiblePorts).to_string();
             }
             return;
         }
@@ -263,7 +342,7 @@ impl Workspace {
                 return;
             }
         }
-        let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search"));
+        let search = cx.new(|cx| InputState::new(window, cx).placeholder(t(cx, T::GraphSearch)));
         search.update(cx, |s, cx| s.focus(window, cx));
         self.menu_sub = Some(cx.subscribe_in(
             &search,
@@ -465,7 +544,7 @@ impl Workspace {
     ) {
         match self.drag {
             Drag::Wire { from, output, .. } if ev.button == MouseButton::Left => {
-                self.finish_wire(from, output, ev.position);
+                self.finish_wire(from, output, ev.position, cx);
                 self.drag = Drag::None;
             }
             Drag::Marquee {
@@ -592,7 +671,7 @@ impl Workspace {
                             .overflow_hidden()
                             .whitespace_nowrap()
                             .font_weight(FontWeight::MEDIUM)
-                            .child(self.graph_name()),
+                            .child(self.graph_name(cx)),
                     )
                     .child(
                         h_flex()
@@ -600,15 +679,19 @@ impl Workspace {
                             .flex_shrink_0()
                             .child(
                                 Button::new("graph-save")
-                                    .label("保存")
+                                    .label(t(cx, T::GraphSave))
                                     .on_click(cx.listener(|this, _, _, cx| this.save_graph(cx))),
                             )
-                            .child(Button::new("graph-load").label("加载").on_click(
-                                cx.listener(|this, _, _, cx| this.pick_and_load_graph(cx)),
-                            ))
+                            .child(
+                                Button::new("graph-load")
+                                    .label(t(cx, T::GraphLoad))
+                                    .on_click(
+                                        cx.listener(|this, _, _, cx| this.pick_and_load_graph(cx)),
+                                    ),
+                            )
                             .child(
                                 Button::new("graph-export")
-                                    .label("导出")
+                                    .label(t(cx, T::GraphExport))
                                     .on_click(cx.listener(|this, _, _, cx| this.export_graph(cx))),
                             ),
                     ),
@@ -645,7 +728,7 @@ impl Workspace {
                     .py_1()
                     .text_xs()
                     .text_color(muted)
-                    .child("拖入画布使用")
+                    .child(t(cx, T::GraphVarsHint))
                     .into_any_element(),
             ]
         } else {
@@ -684,7 +767,7 @@ impl Workspace {
                                 this.vars_open = !this.vars_open;
                                 cx.notify();
                             }))
-                            .child(div().text_xs().child("变量"))
+                            .child(div().text_xs().child(t(cx, T::GraphVariables)))
                             .child(div().text_xs().text_color(muted).child(if open {
                                 "▾"
                             } else {
@@ -774,6 +857,7 @@ impl Workspace {
                     cam,
                     rows,
                     buttons,
+                    locale(cx),
                 )
                 .into_any_element(),
             );
@@ -923,7 +1007,7 @@ impl Workspace {
                                     div()
                                         .text_xs()
                                         .text_color(muted)
-                                        .child("Search")
+                                        .child(t(cx, T::GraphSearch))
                                         .into_any_element()
                                 }),
                         ),
@@ -971,9 +1055,11 @@ impl Workspace {
                 label,
                 color,
             } => (format!("m-{type_id}"), *color, label.clone()),
-            MenuEntry::Get { name, ty } => {
-                (format!("m-get-{name}"), ty.color(), format!("Get {name}"))
-            }
+            MenuEntry::Get { name, ty } => (
+                format!("m-get-{name}"),
+                ty.color(),
+                tf(cx, T::GetVar, &[("name", name)]),
+            ),
             MenuEntry::Header(_) => unreachable!(),
         };
         div()
@@ -1010,8 +1096,13 @@ impl Workspace {
         let mut out = Vec::new();
         let mut vars_section = Vec::new();
         for v in &graph.variables {
-            let get = format!("get {}", v.name).to_lowercase();
-            if q.is_empty() || get.contains(&q) || v.name.to_lowercase().contains(&q) {
+            let mut hay = v.name.clone();
+            for loc in Locale::all() {
+                hay.push(' ');
+                hay.push_str(&tf_loc(loc, T::GetVar, &[("name", &v.name)]));
+            }
+            let hay = hay.to_lowercase();
+            if q.is_empty() || hay.contains(&q) {
                 vars_section.push(MenuEntry::Get {
                     name: v.name.clone(),
                     ty: v.ty,
@@ -1019,7 +1110,7 @@ impl Workspace {
             }
         }
         if !vars_section.is_empty() {
-            out.push(MenuEntry::Header("Variables"));
+            out.push(MenuEntry::Header(t(cx, T::GraphVariables).to_string()));
             out.extend(vars_section);
         }
         drop(graph);
@@ -1034,7 +1125,13 @@ impl Workspace {
             if VarType::from_type_id(&t.type_id).is_some() {
                 continue;
             }
-            let hay = format!("{} {}", t.display_name, t.type_id).to_lowercase();
+            let cat = category_key(t.category);
+            let mut hay = format!("{} {}", t.display_name, t.type_id);
+            for loc in Locale::all() {
+                hay.push(' ');
+                hay.push_str(t_loc(loc, cat));
+            }
+            let hay = hay.to_lowercase();
             if !q.is_empty() && !hay.contains(&q) {
                 continue;
             }
@@ -1050,13 +1147,7 @@ impl Workspace {
             if items.is_empty() {
                 continue;
             }
-            let title = match cat {
-                Category::Input => "Input",
-                Category::Process => "Process",
-                Category::Output => "Output",
-                Category::Utility => "Utility",
-            };
-            out.push(MenuEntry::Header(title));
+            out.push(MenuEntry::Header(t(cx, category_key(cat)).to_string()));
             out.extend(items);
         }
         out
@@ -1100,8 +1191,8 @@ impl Workspace {
         let dialog = self.var_dialog.as_ref()?;
         let form = self.var_form.clone()?;
         let title = match dialog {
-            VarDialog::Create { .. } => "创建变量",
-            VarDialog::Edit { .. } => "编辑变量",
+            VarDialog::Create { .. } => t(cx, T::GraphCreateVar),
+            VarDialog::Edit { .. } => t(cx, T::GraphEditVar),
         };
         Some(
             div()
@@ -1172,7 +1263,7 @@ impl Workspace {
                                         .child(
                                             Button::new("var-dialog-cancel")
                                                 .small()
-                                                .label("取消")
+                                                .label(t(cx, T::GraphCancel))
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     this.close_var_dialog(cx);
                                                 })),
@@ -1181,7 +1272,7 @@ impl Workspace {
                                             Button::new("var-dialog-ok")
                                                 .small()
                                                 .primary()
-                                                .label("确认")
+                                                .label(t(cx, T::GraphOk))
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     this.confirm_var_dialog(cx);
                                                 })),
@@ -1218,16 +1309,60 @@ impl Workspace {
         let form = cx.new(|cx| {
             let name = cx.new(|cx| {
                 InputState::new(window, cx)
-                    .placeholder("名称")
+                    .placeholder(t(cx, T::GraphName))
                     .default_value(initial_name.clone())
             });
             let value = cx.new(|cx| {
                 InputState::new(window, cx)
-                    .placeholder("值")
+                    .placeholder(t(cx, T::GraphValue))
                     .default_value(initial_value.clone())
             });
+            let types: Vec<VarTypeChoice> = VarType::ALL
+                .into_iter()
+                .map(|vt| VarTypeChoice {
+                    ty: vt,
+                    title: t(cx, var_type_key(vt)),
+                })
+                .collect();
+            let type_idx = types.iter().position(|c| c.ty == ty).unwrap_or(0);
+            let type_select = cx.new(|cx| {
+                SelectState::new(
+                    SearchableVec::new(types),
+                    Some(IndexPath::new(type_idx)),
+                    window,
+                    cx,
+                )
+            });
+            let bool_val = matches!(
+                initial_value.to_ascii_lowercase().as_str(),
+                "true" | "1" | "yes"
+            );
+            let bool_select = cx.new(|cx| {
+                SelectState::new(
+                    SearchableVec::new(vec![BoolChoice(false), BoolChoice(true)]),
+                    Some(IndexPath::new(bool_val as usize)),
+                    window,
+                    cx,
+                )
+            });
             name.update(cx, |s, cx| s.focus(window, cx));
-            VarCreateForm { name, value, ty }
+            let type_sub = cx.subscribe_in(
+                &type_select,
+                window,
+                |this: &mut VarCreateForm, _, ev: &SelectEvent<SearchableVec<VarTypeChoice>>, window, cx| {
+                    if let SelectEvent::Confirm(Some(next)) = ev {
+                        this.apply_type(*next, window, cx);
+                    }
+                },
+            );
+            VarCreateForm {
+                name,
+                value,
+                ty,
+                type_select,
+                bool_select,
+                _type_sub: Some(type_sub),
+            }
         });
         self.var_form = Some(form);
         self.var_dialog = Some(kind);
@@ -1241,18 +1376,15 @@ impl Workspace {
         let Some(kind) = self.var_dialog.clone() else {
             return;
         };
-        let (name, raw, ty) = {
+        let (name, value, ty) = {
             let f = form.read(cx);
-            (
-                f.name.read(cx).value().to_string(),
-                f.value.read(cx).value().to_string(),
-                f.ty,
-            )
-        };
-        let Some(value) = parse_var_value(ty, &raw) else {
-            self.status = "变量值无效".into();
-            cx.notify();
-            return;
+            let ty = f.current_ty(cx);
+            let Some(value) = f.current_value(cx) else {
+                self.status = t(cx, T::GraphInvalidValue).to_string();
+                cx.notify();
+                return;
+            };
+            (f.name.read(cx).value().to_string(), value, ty)
         };
         match kind {
             VarDialog::Create { .. } => {
@@ -1263,7 +1395,7 @@ impl Workspace {
                 let new_name = g.update_variable(&original, name, ty, value);
                 drop(g);
                 self.session.recompile();
-                self.status = format!("variable {new_name}");
+                self.status = tf(cx, T::StatusVariable, &[("name", &new_name)]);
                 cx.notify();
             }
         }
@@ -1284,7 +1416,7 @@ impl Workspace {
         }
         drop(g);
         self.session.recompile();
-        self.status = format!("variable {name}");
+        self.status = tf(cx, T::StatusVariable, &[("name", &name)]);
         cx.notify();
         name
     }

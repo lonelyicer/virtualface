@@ -62,7 +62,7 @@ impl Workspace {
                             .text_lg()
                             .font_weight(FontWeight::SEMIBOLD)
                             .whitespace_nowrap()
-                            .child(self.page.title()),
+                            .child(self.page.title(cx)),
                     ),
             )
             .child(window_controls(window, cx))
@@ -103,7 +103,7 @@ impl Workspace {
                     .gap_1()
                     .child(nav_item(
                         "nav-home",
-                        AppPage::Home.title(),
+                        AppPage::Home.title(cx),
                         IconName::LayoutDashboard,
                         page == AppPage::Home,
                         cx,
@@ -111,7 +111,7 @@ impl Workspace {
                     ))
                     .child(nav_item(
                         "nav-graph",
-                        AppPage::Graph.title(),
+                        AppPage::Graph.title(cx),
                         IconName::Network,
                         page == AppPage::Graph,
                         cx,
@@ -119,7 +119,7 @@ impl Workspace {
                     ))
                     .child(nav_item(
                         "nav-settings",
-                        AppPage::Settings.title(),
+                        AppPage::Settings.title(cx),
                         IconName::Settings,
                         page == AppPage::Settings,
                         cx,
@@ -127,7 +127,7 @@ impl Workspace {
                     ))
                     .child(nav_item(
                         "nav-log",
-                        AppPage::Log.title(),
+                        AppPage::Log.title(cx),
                         IconName::FileText,
                         page == AppPage::Log,
                         cx,
@@ -240,7 +240,7 @@ fn window_btn(
 
 fn nav_item(
     id: &'static str,
-    label: &'static str,
+    label: SharedString,
     icon: IconName,
     active: bool,
     cx: &mut Context<Workspace>,

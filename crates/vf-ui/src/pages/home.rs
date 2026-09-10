@@ -1,3 +1,4 @@
+use crate::i18n::{T, t, tf};
 use crate::theme::{latest_snapshot, status_rgb};
 use crate::workspace::Workspace;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -14,6 +15,7 @@ impl Workspace {
         let type_n = self.session.registry.all().len();
         let missing = graph.nodes.iter().filter(|n| n.missing).count();
         let running = snap.running;
+        let name = self.graph_name(cx);
 
         v_flex()
             .id("home-page")
@@ -28,25 +30,41 @@ impl Workspace {
                 div()
                     .text_lg()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("状态"),
+                    .child(t(cx, T::HomeStatus)),
             )
             .child(
                 h_flex()
                     .gap_3()
                     .child(stat_card(
-                        "引擎",
-                        if running { "运行中" } else { "已停止" },
+                        t(cx, T::HomeEngine),
+                        if running {
+                            t(cx, T::HomeRunning)
+                        } else {
+                            t(cx, T::HomeStopped)
+                        },
                         running,
                     ))
-                    .child(stat_card("Tick", &snap.tick.to_string(), running))
-                    .child(stat_card("丢帧", &snap.drops.to_string(), snap.drops == 0))
-                    .child(stat_card("频率", &format!("{:.0} Hz", graph.rate_hz), true)),
+                    .child(stat_card(
+                        t(cx, T::HomeTick),
+                        SharedString::from(snap.tick.to_string()),
+                        running,
+                    ))
+                    .child(stat_card(
+                        t(cx, T::HomeDrops),
+                        SharedString::from(snap.drops.to_string()),
+                        snap.drops == 0,
+                    ))
+                    .child(stat_card(
+                        t(cx, T::HomeRate),
+                        SharedString::from(format!("{:.0} Hz", graph.rate_hz)),
+                        true,
+                    )),
             )
             .child(
                 GroupBox::new()
                     .id("home-engine")
                     .outline()
-                    .title("引擎")
+                    .title(t(cx, T::HomeEngine))
                     .child(
                         h_flex()
                             .gap_2()
@@ -54,12 +72,12 @@ impl Workspace {
                             .child(
                                 Button::new("home-start")
                                     .primary()
-                                    .label("启动")
+                                    .label(t(cx, T::HomeStart))
                                     .on_click(cx.listener(|this, _, _, cx| this.start_engine(cx))),
                             )
                             .child(
                                 Button::new("home-stop")
-                                    .label("停止")
+                                    .label(t(cx, T::HomeStop))
                                     .on_click(cx.listener(|this, _, _, cx| this.stop_engine(cx))),
                             )
                             .child(
@@ -75,8 +93,8 @@ impl Workspace {
                 GroupBox::new()
                     .id("home-graph")
                     .outline()
-                    .title("节点图")
-                    .child(div().child(format!("图  {}", self.graph_name())))
+                    .title(t(cx, T::HomeGraph))
+                    .child(div().child(tf(cx, T::HomeGraphName, &[("name", &name)])))
                     .when(!self.graph_path.is_empty(), |el| {
                         el.child(
                             div()
@@ -85,19 +103,29 @@ impl Workspace {
                                 .child(self.graph_path.clone()),
                         )
                     })
-                    .child(div().child(format!(
-                        "节点 {}  ·  连线 {}  ·  缺失插件 {}",
-                        graph.nodes.len(),
-                        graph.edges.len(),
-                        missing
+                    .child(div().child(tf(
+                        cx,
+                        T::HomeGraphStats,
+                        &[
+                            ("nodes", &graph.nodes.len().to_string()),
+                            ("edges", &graph.edges.len().to_string()),
+                            ("missing", &missing.to_string()),
+                        ],
                     ))),
             )
             .child(
                 GroupBox::new()
                     .id("home-plugins")
                     .outline()
-                    .title("插件")
-                    .child(div().child(format!("已加载 {plugin_n} 个插件，{type_n} 种节点")))
+                    .title(t(cx, T::HomePlugins))
+                    .child(div().child(tf(
+                        cx,
+                        T::HomePluginsLoaded,
+                        &[
+                            ("plugins", &plugin_n.to_string()),
+                            ("types", &type_n.to_string()),
+                        ],
+                    )))
                     .children(self.session.host.plugins().iter().map(|p| {
                         div()
                             .text_xs()
@@ -114,14 +142,14 @@ impl Workspace {
                 GroupBox::new()
                     .id("home-nodes")
                     .outline()
-                    .title("节点状态")
+                    .title(t(cx, T::HomeNodeStatus))
                     .map(|box_| {
                         if graph.nodes.is_empty() {
                             return box_.child(
                                 div()
                                     .text_xs()
                                     .text_color(muted)
-                                    .child("图是空的，到节点图添加节点"),
+                                    .child(t(cx, T::HomeGraphEmpty)),
                             );
                         }
                         box_.children(graph.nodes.iter().map(|n| {
@@ -147,7 +175,7 @@ impl Workspace {
     }
 }
 
-fn stat_card(label: &str, value: &str, ok: bool) -> impl IntoElement {
+fn stat_card(label: SharedString, value: SharedString, ok: bool) -> impl IntoElement {
     v_flex()
         .flex_1()
         .p_3()
@@ -155,11 +183,11 @@ fn stat_card(label: &str, value: &str, ok: bool) -> impl IntoElement {
         .border_1()
         .border_color(rgb(0x3f3f46))
         .gap_1()
-        .child(div().text_xs().child(SharedString::from(label.to_string())))
+        .child(div().text_xs().child(label))
         .child(
             div()
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(if ok { rgb(0x22c55e) } else { rgb(0xf59e0b) })
-                .child(SharedString::from(value.to_string())),
+                .child(value),
         )
 }

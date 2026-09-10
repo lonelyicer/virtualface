@@ -1,0 +1,86 @@
+{
+  "meta": {
+    "name": "English",
+    "aliases": ["en-US", "en_US"]
+  },
+  "nav": {
+    "home": "Home",
+    "graph": "Graph",
+    "settings": "Settings",
+    "log": "Logs"
+  },
+  "home": {
+    "status": "Status",
+    "engine": "Engine",
+    "running": "Running",
+    "stopped": "Stopped",
+    "tick": "Tick",
+    "drops": "Drops",
+    "rate": "Rate",
+    "start": "Start",
+    "stop": "Stop",
+    "graph": "Graph",
+    "graph_name": "Graph  {name}",
+    "graph_stats": "{nodes} nodes  ·  {edges} edges  ·  {missing} missing plugins",
+    "plugins": "Plugins",
+    "plugins_loaded": "{plugins} plugins, {types} node types",
+    "node_status": "Node status",
+    "graph_empty": "Graph is empty — add nodes on the Graph page"
+  },
+  "settings": {
+    "engine_rate": "Engine rate",
+    "plugins": "Loaded plugins",
+    "language": "Language"
+  },
+  "graph": {
+    "save": "Save",
+    "load": "Load",
+    "export": "Export",
+    "load_prompt": "Load graph",
+    "search": "Search",
+    "variables": "Variables",
+    "vars_hint": "Drag onto the canvas to use",
+    "create_var": "Create variable",
+    "edit_var": "Edit variable",
+    "cancel": "Cancel",
+    "ok": "OK",
+    "name": "Name",
+    "type": "Type",
+    "value": "Value",
+    "invalid_value": "Invalid variable value",
+    "unnamed": "Untitled",
+    "get_var": "Get {name}",
+    "set_var": "Set {name}",
+    "plugin_missing": "plugin missing",
+    "missing_node": "missing: {id}",
+    "incompatible_ports": "incompatible ports"
+  },
+  "category": {
+    "input": "Input",
+    "process": "Process",
+    "output": "Output",
+    "utility": "Utility"
+  },
+  "log": {
+    "empty": "No logs yet"
+  },
+  "status": {
+    "ready": "ready",
+    "running": "running",
+    "stopped": "stopped",
+    "saved": "saved {path}",
+    "save_failed": "save failed: {err}",
+    "loaded": "loaded {path}",
+    "load_failed": "load failed: {err}",
+    "open_failed": "open failed: {err}",
+    "export_failed": "export failed: {err}",
+    "tick_rate": "tick rate {rate} Hz",
+    "variable": "variable {name}"
+  },
+  "type": {
+    "float": "Float",
+    "int": "Int",
+    "bool": "Bool",
+    "string": "String"
+  }
+}

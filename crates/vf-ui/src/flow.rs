@@ -4,6 +4,7 @@
 //! absolutely positioned nodes with left/right handles, and overlay controls.
 //! Pan/zoom is the ReactFlow viewport transform `translate(x, y) scale(zoom)`.
 
+use crate::i18n::{Locale, T, t_loc, tf_loc};
 use crate::theme::{
     Camera, EDITOR_H, HEADER_H, NODE_W, PORT_H, PORT_R, Vec2, category_color, status_rgb, tag_color,
 };
@@ -244,6 +245,7 @@ pub fn node(
     missing: bool,
     level: u32,
     cam: Camera,
+    loc: Locale,
 ) -> impl IntoElement {
     let n_in = inputs.len();
     let n_out = outputs.len();
@@ -427,7 +429,7 @@ pub fn node(
                             .p_1()
                             .text_size(font)
                             .text_color(rgb(0xef4444))
-                            .child("plugin missing"),
+                            .child(t_loc(loc, T::PluginMissing)),
                     )
                 }),
         )
@@ -442,18 +444,19 @@ pub fn snapshot_node(
     cam: Camera,
     param_rows: Vec<ParamRow>,
     buttons: Vec<AnyElement>,
+    loc: Locale,
 ) -> impl IntoElement {
     let ty = session.registry.get(&n.type_id);
     let mut title = ty
         .map(|t| t.display_name.clone())
-        .unwrap_or_else(|| format!("missing: {}", n.type_id));
+        .unwrap_or_else(|| tf_loc(loc, T::MissingNode, &[("id", &n.type_id)]));
     if let Some((is_get, _)) = VarType::from_type_id(&n.type_id) {
         let name = n.params.get("name").and_then(|v| v.as_str()).unwrap_or("");
         if !name.is_empty() {
             title = if is_get {
-                format!("Get {name}")
+                tf_loc(loc, T::GetVar, &[("name", name)])
             } else {
-                format!("Set {name}")
+                tf_loc(loc, T::SetVar, &[("name", name)])
             };
         }
     }
@@ -462,7 +465,7 @@ pub fn snapshot_node(
     let outputs = ty.map(|t| t.outputs.clone()).unwrap_or_default();
     let level = snap.nodes.get(&n.id.0).map(|s| s.status_level).unwrap_or(3);
     node(
-        n, title, cat, inputs, outputs, param_rows, buttons, selected, n.missing, level, cam,
+        n, title, cat, inputs, outputs, param_rows, buttons, selected, n.missing, level, cam, loc,
     )
 }
 

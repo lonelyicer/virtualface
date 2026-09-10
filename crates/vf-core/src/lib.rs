@@ -20,8 +20,8 @@ pub use instance::{NodeSnap, Snapshot, SnapshotValue};
 pub use log::{LogBus, LogLine, format_ts, level_name, now_us, tracing_from_bus};
 pub use plugin::{LoadedPlugin, PluginHost, default_plugin_dirs};
 pub use prefs::{
-    absolute_path, config_dir, graph_display_name, last_graph_path, remember_last_graph,
-    with_graph_extension,
+    absolute_path, config_dir, graph_display_name, last_graph_path, load_locale, remember_last_graph,
+    save_locale, with_graph_extension,
 };
 pub use registry::{NodeRegistry, NodeType, PortType};
 pub use vars::{GraphVar, VarType};

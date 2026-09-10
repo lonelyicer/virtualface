@@ -1,7 +1,9 @@
+use crate::i18n::{Locale, T, locale, set_locale, t, tf};
 use crate::page::AppPage;
 use crate::theme::{Camera, Drag, Vec2};
 use gpui_kit::component::input::InputState;
-use gpui_kit::component::{ActiveTheme, Root, TitleBar, h_flex, v_flex};
+use gpui_kit::component::select::{SearchableVec, SelectEvent, SelectState};
+use gpui_kit::component::{ActiveTheme, IndexPath, Root, TitleBar, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
@@ -46,11 +48,13 @@ pub struct Workspace {
     pub(crate) log_scroll: ScrollHandle,
     pub(crate) log_len: usize,
     pub(crate) log_tail_ts: u64,
+    pub(crate) language_select: Entity<SelectState<SearchableVec<Locale>>>,
+    _language_sub: Option<Subscription>,
     _appearance: Option<Subscription>,
 }
 
 impl Workspace {
-    pub fn new(session: Arc<Session>, cx: &mut Context<Self>) -> Self {
+    pub fn new(session: Arc<Session>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
@@ -63,6 +67,26 @@ impl Workspace {
         })
         .detach();
         let graph_path = session.graph_path.lock().clone();
+        let locales: Vec<Locale> = Locale::all().collect();
+        let current = locale(cx);
+        let selected = locales.iter().position(|l| *l == current).unwrap_or(0);
+        let language_select = cx.new(|cx| {
+            SelectState::new(
+                SearchableVec::new(locales),
+                Some(IndexPath::new(selected)),
+                window,
+                cx,
+            )
+        });
+        let language_sub = cx.subscribe(
+            &language_select,
+            |_, _, ev: &SelectEvent<SearchableVec<Locale>>, cx| {
+                if let SelectEvent::Confirm(Some(loc)) = ev {
+                    set_locale(cx, *loc);
+                    cx.notify();
+                }
+            },
+        );
         Self {
             session,
             page: AppPage::Home,
@@ -83,12 +107,14 @@ impl Workspace {
             var_dialog: None,
             var_form: None,
             graph_path,
-            status: "ready".into(),
+            status: t(cx, T::StatusReady).to_string(),
             focus: cx.focus_handle(),
             title_should_move: false,
             log_scroll: ScrollHandle::default(),
             log_len: 0,
             log_tail_ts: 0,
+            language_select,
+            _language_sub: Some(language_sub),
             _appearance: None,
         }
     }
@@ -112,18 +138,18 @@ impl Workspace {
     pub(crate) fn start_engine(&mut self, cx: &mut Context<Self>) {
         self.session.recompile();
         self.session.engine.start();
-        self.status = "running".into();
+        self.status = t(cx, T::StatusRunning).to_string();
         cx.notify();
     }
 
     pub(crate) fn stop_engine(&mut self, cx: &mut Context<Self>) {
         self.session.engine.stop();
-        self.status = "stopped".into();
+        self.status = t(cx, T::StatusStopped).to_string();
         cx.notify();
     }
 
-    pub(crate) fn graph_name(&self) -> String {
-        graph_display_name(&self.graph_path)
+    pub(crate) fn graph_name(&self, cx: &App) -> String {
+        graph_display_name(&self.graph_path, t(cx, T::Unnamed).as_ref())
     }
 
     fn set_current_graph_path(&mut self, path: PathBuf) {
@@ -148,16 +174,18 @@ impl Workspace {
             Ok(s) => match std::fs::write(&path, s) {
                 Ok(()) => {
                     self.set_current_graph_path(path);
-                    self.status = format!("saved {}", self.graph_path);
+                    self.status = tf(cx, T::StatusSaved, &[("path", &self.graph_path)]);
                     self.note(2, self.status.clone());
                 }
                 Err(e) => {
-                    self.status = format!("save failed: {e}");
+                    let err = e.to_string();
+                    self.status = tf(cx, T::StatusSaveFailed, &[("err", &err)]);
                     self.note(0, self.status.clone());
                 }
             },
             Err(e) => {
-                self.status = format!("save failed: {e}");
+                let err = e.to_string();
+                self.status = tf(cx, T::StatusSaveFailed, &[("err", &err)]);
                 self.note(0, self.status.clone());
             }
         }
@@ -179,16 +207,18 @@ impl Workspace {
                 Ok(()) => {
                     self.set_current_graph_path(path.to_path_buf());
                     self.reset_editor_for_graph();
-                    self.status = format!("loaded {}", self.graph_path);
+                    self.status = tf(cx, T::StatusLoaded, &[("path", &self.graph_path)]);
                     self.note(2, self.status.clone());
                 }
                 Err(e) => {
-                    self.status = format!("load failed: {e}");
+                    let err = e.to_string();
+                    self.status = tf(cx, T::StatusLoadFailed, &[("err", &err)]);
                     self.note(0, self.status.clone());
                 }
             },
             Err(e) => {
-                self.status = format!("open failed: {e}");
+                let err = e.to_string();
+                self.status = tf(cx, T::StatusOpenFailed, &[("err", &err)]);
                 self.note(0, self.status.clone());
             }
         }
@@ -200,7 +230,7 @@ impl Workspace {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some("加载图".into()),
+            prompt: Some(t(cx, T::GraphLoadPrompt)),
         });
         cx.spawn(async move |this, cx| {
             let outcome = match rx.await {
@@ -217,7 +247,8 @@ impl Workspace {
                 Ok(None) => {}
                 Err(e) => {
                     this.update(cx, |this, cx| {
-                        this.status = format!("open failed: {e}");
+                        let err = e.to_string();
+                        this.status = tf(cx, T::StatusOpenFailed, &[("err", &err)]);
                         this.note(0, this.status.clone());
                         cx.notify();
                     })
@@ -253,7 +284,8 @@ impl Workspace {
                 Ok(None) => {}
                 Err(e) => {
                     this.update(cx, |this, cx| {
-                        this.status = format!("export failed: {e}");
+                        let err = e.to_string();
+                        this.status = tf(cx, T::StatusExportFailed, &[("err", &err)]);
                         this.note(0, this.status.clone());
                         cx.notify();
                     })
@@ -270,7 +302,8 @@ impl Workspace {
         let rate = g.rate_hz;
         drop(g);
         self.session.recompile();
-        self.status = format!("tick rate {rate:.0} Hz");
+        let rate = format!("{rate:.0}");
+        self.status = tf(cx, T::StatusTickRate, &[("rate", &rate)]);
         self.note(2, self.status.clone());
         cx.notify();
     }
@@ -290,7 +323,7 @@ impl Workspace {
                 .graph_page(window, cx, bg, surface, border, muted)
                 .into_any_element(),
             AppPage::Settings => self.settings_page(cx, muted).into_any_element(),
-            AppPage::Log => self.log_page(muted).into_any_element(),
+            AppPage::Log => self.log_page(cx, muted).into_any_element(),
         }
     }
 }
@@ -360,7 +393,7 @@ pub fn open_workspace(session: Arc<Session>, cx: &mut App) {
         },
         |window, cx| {
             crate::theme::lock_dark_theme_for_window(window, cx);
-            let view = cx.new(|cx| Workspace::new(session, cx));
+            let view = cx.new(|cx| Workspace::new(session, window, cx));
             let appearance = window.observe_window_appearance(|window, cx| {
                 crate::theme::lock_dark_theme_for_window(window, cx);
             });

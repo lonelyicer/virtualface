@@ -16,6 +16,31 @@ fn last_graph_file() -> Option<PathBuf> {
     Some(config_dir()?.join("last_graph"))
 }
 
+fn locale_file() -> Option<PathBuf> {
+    Some(config_dir()?.join("locale"))
+}
+
+/// Saved UI locale id (`en` / `zh-CN`), if the user picked one.
+pub fn load_locale() -> Option<String> {
+    let raw = std::fs::read_to_string(locale_file()?).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+pub fn save_locale(id: &str) {
+    let Some(dir) = config_dir() else {
+        return;
+    };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let _ = std::fs::write(dir.join("locale"), id.as_bytes());
+}
+
 /// Absolute path of the most recently opened or saved graph, if any.
 pub fn last_graph_path() -> Option<PathBuf> {
     let raw = std::fs::read_to_string(last_graph_file()?).ok()?;
@@ -59,9 +84,9 @@ pub fn with_graph_extension(path: PathBuf) -> PathBuf {
     }
 }
 
-pub fn graph_display_name(path: &str) -> String {
+pub fn graph_display_name(path: &str, unnamed: &str) -> String {
     if path.is_empty() {
-        return "未命名".into();
+        return unnamed.to_string();
     }
     let name = Path::new(path)
         .file_name()
