@@ -7507,6 +7507,7 @@ dependencies = [
  "libloading",
  "parking_lot",
  "petgraph",
+ "rosc",
  "serde",
  "serde_json",
  "thiserror 2.0.20",

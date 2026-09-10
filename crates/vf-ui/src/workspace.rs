@@ -9,7 +9,8 @@ use gpui_kit::prelude::*;
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use vf_core::{ArchiveIndex, Graph, NodeId, Session};
+use std::time::{Duration, Instant};
+use vf_core::{ArchiveIndex, Graph, NodeId, Session, Snapshot};
 
 use crate::archives::bootstrap_archives;
 
@@ -48,6 +49,7 @@ pub struct Workspace {
     pub(crate) var_dialog: Option<VarDialog>,
     pub(crate) var_form: Option<Entity<crate::pages::graph::VarCreateForm>>,
     pub(crate) archives: ArchiveIndex,
+    pub(crate) autosave: crate::autosave::Autosave,
     pub(crate) archive_menu_open: bool,
     pub(crate) archive_picker_bounds: Bounds<Pixels>,
     pub(crate) undo_stack: Vec<Graph>,
@@ -55,12 +57,11 @@ pub struct Workspace {
     pub(crate) status: String,
     pub(crate) focus: FocusHandle,
     pub(crate) title_should_move: bool,
-    pub(crate) log_scroll: ScrollHandle,
-    pub(crate) log_len: usize,
-    pub(crate) log_tail_ts: u64,
+    pub(crate) log_view: crate::pages::log::LogView,
+    pub(crate) graph_scene: Option<Arc<crate::flow::GraphScene>>,
     live_ui_pumping: bool,
-    ui_snap_tick: u64,
-    ui_snap_running: bool,
+    ui_snapshot: Arc<Snapshot>,
+    ui_home_updated: Instant,
     ui_log_seq: u64,
     pub(crate) license_scroll: VirtualListScrollHandle,
     pub(crate) license_expanded: Option<LicenseId>,
@@ -92,6 +93,7 @@ impl Workspace {
             },
         );
         let archives = bootstrap_archives(&session, t(cx, T::Unnamed).as_ref());
+        let autosave = crate::autosave::Autosave::new(session.host.log.clone());
         Self {
             session,
             page: AppPage::Home,
@@ -112,6 +114,7 @@ impl Workspace {
             var_dialog: None,
             var_form: None,
             archives,
+            autosave,
             archive_menu_open: false,
             archive_picker_bounds: Bounds::default(),
             undo_stack: Vec::new(),
@@ -119,12 +122,11 @@ impl Workspace {
             status: t(cx, T::StatusReady).to_string(),
             focus: cx.focus_handle(),
             title_should_move: false,
-            log_scroll: ScrollHandle::default(),
-            log_len: 0,
-            log_tail_ts: 0,
+            log_view: crate::pages::log::LogView::new(),
+            graph_scene: None,
             live_ui_pumping: false,
-            ui_snap_tick: 0,
-            ui_snap_running: false,
+            ui_snapshot: Arc::new(Snapshot::default()),
+            ui_home_updated: Instant::now(),
             ui_log_seq: 0,
             license_scroll: VirtualListScrollHandle::new(),
             license_expanded: None,
@@ -158,51 +160,61 @@ impl Workspace {
         }
     }
 
-    fn sync_live_ui_cursors(&mut self) {
-        let snap = self.session.engine.snapshot();
-        self.ui_snap_tick = snap.tick;
-        self.ui_snap_running = snap.running;
-        self.ui_log_seq = self.session.host.log.seq();
-    }
-
     fn consume_live_ui_dirty(&mut self) -> bool {
         let snap = self.session.engine.snapshot();
         let log_seq = self.session.host.log.seq();
-        let snap_changed =
-            snap.tick != self.ui_snap_tick || snap.running != self.ui_snap_running;
-        let log_changed = log_seq != self.ui_log_seq;
-        self.ui_snap_tick = snap.tick;
-        self.ui_snap_running = snap.running;
-        self.ui_log_seq = log_seq;
-        match self.page {
-            AppPage::Home | AppPage::Graph => snap_changed,
-            AppPage::Log => log_changed,
+        let dirty = match self.page {
+            AppPage::Graph => graph_status_changed(&self.ui_snapshot, &snap),
+            AppPage::Home => {
+                let changed = snap.running != self.ui_snapshot.running
+                    || (snap.tick != self.ui_snapshot.tick
+                        && self.ui_home_updated.elapsed() >= Duration::from_millis(100));
+                if changed {
+                    self.ui_home_updated = Instant::now();
+                }
+                changed
+            }
+            AppPage::Log => log_seq != self.ui_log_seq,
             AppPage::Settings | AppPage::Licenses => false,
+        };
+        // Keep the last displayed home sample until the next statistics update.
+        if self.page != AppPage::Home || dirty {
+            self.ui_snapshot = snap;
         }
+        self.ui_log_seq = log_seq;
+        dirty
     }
 
-    fn ensure_live_ui_pump(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn ensure_live_ui_pump(&mut self, cx: &mut Context<Self>) {
         if self.live_ui_pumping || !self.wants_live_frames() {
             return;
         }
         self.live_ui_pumping = true;
-        self.sync_live_ui_cursors();
-        cx.on_next_frame(window, |this, window, cx| {
-            this.on_live_ui_frame(window, cx);
-        });
-    }
-
-    fn on_live_ui_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.consume_live_ui_dirty() {
-            cx.notify();
-        }
-        if self.wants_live_frames() {
-            cx.on_next_frame(window, |this, window, cx| {
-                this.on_live_ui_frame(window, cx);
-            });
-        } else {
-            self.live_ui_pumping = false;
-        }
+        self.ui_snapshot = self.session.engine.snapshot();
+        self.ui_log_seq = self.session.host.log.seq();
+        // Polling data must not itself request a presentation. Input events still
+        // invalidate immediately and are presented at the display's frame rate.
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(33))
+                    .await;
+                let keep_polling = this.update(cx, |this, cx| {
+                    if this.consume_live_ui_dirty() {
+                        cx.notify();
+                    }
+                    let keep_polling = this.wants_live_frames();
+                    if !keep_polling {
+                        this.live_ui_pumping = false;
+                    }
+                    keep_polling
+                });
+                if !matches!(keep_polling, Ok(true)) {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     pub(crate) fn start_engine(&mut self, cx: &mut Context<Self>) {
@@ -224,6 +236,7 @@ impl Workspace {
         self.close_add_menu();
         self.pin_inputs.clear();
         self.pin_subs.clear();
+        self.graph_scene = None;
     }
 
     fn page_body(
@@ -249,7 +262,7 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.ensure_live_ui_pump(window, cx);
+        self.ensure_live_ui_pump(cx);
         let theme = cx.theme().clone();
         let bg = theme.background;
         let fg = theme.foreground;
@@ -295,6 +308,15 @@ impl Render for Workspace {
     }
 }
 
+// The graph displays status lights, not per-tick port payloads or timing.
+fn graph_status_changed(before: &Snapshot, after: &Snapshot) -> bool {
+    before.running != after.running
+        || before.nodes.len() != after.nodes.len()
+        || after.nodes.iter().any(|(id, node)| {
+            before.nodes.get(id).map(|n| n.status_level) != Some(node.status_level)
+        })
+}
+
 impl Focusable for Workspace {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
@@ -325,4 +347,47 @@ pub fn open_workspace(session: Arc<Session>, cx: &mut App) {
     )
     .ok();
     cx.activate(true);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::prelude::v1::test;
+    use vf_core::{NodeSnap, SnapshotValue};
+
+    #[test]
+    fn graph_refreshes_status_changes_but_not_engine_ticks_or_payloads() {
+        let mut before = Snapshot::default();
+        before.nodes.insert(
+            1,
+            NodeSnap {
+                status_level: 0,
+                status_text: String::new(),
+                outputs: vec![],
+                disabled: false,
+                state: None,
+            },
+        );
+        let mut after = before.clone();
+        after.tick += 1;
+        after.dt_us = 10000;
+        after
+            .nodes
+            .get_mut(&1)
+            .unwrap()
+            .outputs
+            .push(SnapshotValue::Float(0.5));
+        assert!(!graph_status_changed(&before, &after));
+        after.nodes.get_mut(&1).unwrap().status_level = 1;
+        assert!(graph_status_changed(&before, &after));
+        after = before.clone();
+        after.running = true;
+        assert!(graph_status_changed(&before, &after));
+        after = before.clone();
+        let node = after.nodes.remove(&1).unwrap();
+        after.nodes.insert(2, node);
+        assert!(graph_status_changed(&before, &after));
+        after.nodes.clear();
+        assert!(graph_status_changed(&before, &after));
+    }
 }

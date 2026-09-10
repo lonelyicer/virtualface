@@ -14,7 +14,7 @@ The host is a graph runner. Face-tracking semantics live in plugins.
 
 Example plugins (one crate may export any mix of node categories):
 
-- `vf-plugin-pico` — `pico.udp_source`, `pico.synthetic`
+- `vf-plugin-pico` — `pico.udp_source`
 - `vf-plugin-unified` — calibration, 1€ filter, merge, shape math, correctors
 - `vf-plugin-vrc-osc` — VRChat `v2/*` OSC, raw float OSC
 
@@ -45,17 +45,16 @@ A dedicated thread ticks at 100 Hz. Input nodes call `host.wake()` to cut wait. 
 
 `Session` shuts the engine down (join + `destroy`) **before** `PluginHost` drops `libloading::Library` handles. Unmapping a cdylib while vtable pointers are still in use is undefined (typically SIGSEGV). Plugins are not unloaded at runtime.
 
-Snapshots are published through `ArcSwap` for a 30 Hz UI poll.
+Snapshots are published through `ArcSwap`. The UI polls about every 33 ms while a live page is open; polling alone does not request a frame. The graph refreshes only when displayed node statuses change, and home statistics refresh at most 10 times per second. Mouse input invalidates immediately, independently of the data polling rate.
 
 ## UI
 
-`vf-ui` is a gpui-kit `Root` window with a fixed split (Phase 2 can persist this as `DockArea`):
+`vf-ui` is a gpui-kit `Root` window with Home, Graph, Settings, Licenses and Log pages.
 
-- Toolbar: Start / Stop / Open / Save / Reload / Delete, plus tick and drop stats
-- Left palette: node types grouped by plugin, plus loaded plugin list
-- Center canvas: grid, cubic-bezier wires, pan/zoom, drag nodes, typed connections
-- Right inspector: schema-driven params, live port previews, status
-- Bottom log: plugin `host.log` ring buffer
+- The graph caches world-space layouts and indexed connections until graph data changes. It creates widgets only for nodes intersecting the viewport plus overscan, retaining focused inputs and dragged nodes outside the viewport.
+- Edges use cached endpoint geometry and are culled by their cubic control-point hull before tessellation. This preserves wires crossing the viewport even when both ends are outside it.
+- Logs use an incremental sequence cursor, cached formatted messages and a variable-height virtual list. New messages follow the tail only while the user remains at the bottom.
+- Graph edits queue autosaves on one background thread with a 250 ms debounce. Archive switch/save/delete operations flush pending writes before accessing files, and shutdown drains the writer. Serialization and disk writes do not run on the typing path.
 
 ## Plugin search paths
 

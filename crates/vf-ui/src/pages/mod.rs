@@ -1,5 +1,5 @@
 pub(crate) mod graph;
 mod home;
 mod licenses;
-mod log;
+pub(crate) mod log;
 mod settings;

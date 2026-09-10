@@ -509,14 +509,14 @@ mod tests {
 
     #[test]
     fn parse_and_interpolate() {
-        assert_eq!(Locale::parse("zh_CN").map(Locale::id), Some("zh-CN"));
+        assert_eq!(Locale::parse("zh_CN").map(Locale::id), Some("zh_Hans"));
         assert_eq!(Locale::parse("en-US").map(Locale::id), Some("en"));
         assert_eq!(
             interpolate("saved {path}", &[("path", "/tmp/a")]),
             "saved /tmp/a"
         );
         let en = Locale::parse("en").unwrap();
-        let zh = Locale::parse("zh-CN").unwrap();
+        let zh = Locale::parse("zh_Hans").unwrap();
         assert_ne!(t_loc(en, T::NavHome), t_loc(zh, T::NavHome));
     }
 

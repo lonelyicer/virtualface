@@ -17,9 +17,10 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use vf_abi::ports_compatible;
-use vf_core::{Graph, GraphNode, PortRef, Session, Snapshot, VarType};
+use vf_core::{Graph, GraphNode, NodeId, PortRef, Session, Snapshot, VarType};
 use vf_sdk::Category;
 
+#[derive(Clone)]
 pub struct FlowEdge {
     pub x0: f32,
     pub y0: f32,
@@ -126,6 +127,10 @@ pub fn paint_background(window: &mut Window, bounds: Bounds<Pixels>, cam: Camera
 pub fn paint_edge(window: &mut Window, bounds: Bounds<Pixels>, cam: Camera, e: &FlowEdge) {
     let a = cam.world_to_screen(e.x0, e.y0);
     let b = cam.world_to_screen(e.x1, e.y1);
+    let dx = (f32::from(b.x) - f32::from(a.x)).abs().max(50.0);
+    if !edge_visible(a, b, dx, bounds.size) {
+        return;
+    }
     let width = px((1.5 * cam.zoom.max(0.7)).clamp(1.0, 2.5));
     let mut builder = if e.dashed {
         PathBuilder::stroke(width).dash_array(&[px(5.), px(4.)])
@@ -137,7 +142,6 @@ pub fn paint_edge(window: &mut Window, bounds: Bounds<Pixels>, cam: Camera, e: &
     let bx = bounds.origin.x + b.x;
     let by = bounds.origin.y + b.y;
     builder.move_to(point(ax, ay));
-    let dx = (f32::from(bx) - f32::from(ax)).abs().max(50.0);
     builder.cubic_bezier_to(
         point(bx, by),
         point(ax + px(dx * 0.5), ay),
@@ -146,6 +150,19 @@ pub fn paint_edge(window: &mut Window, bounds: Bounds<Pixels>, cam: Camera, e: &
     if let Ok(path) = builder.build() {
         window.paint_path(path, e.color);
     }
+}
+
+// A cubic lies inside the hull of its endpoints and control points. Include
+// both controls: backward wires may enter the viewport with both ends outside.
+fn edge_visible(a: Point<Pixels>, b: Point<Pixels>, dx: f32, viewport: Size<Pixels>) -> bool {
+    let min_x = f32::from(a.x).min(f32::from(b.x) - dx * 0.5);
+    let max_x = f32::from(b.x).max(f32::from(a.x) + dx * 0.5);
+    let min_y = f32::from(a.y).min(f32::from(b.y));
+    let max_y = f32::from(a.y).max(f32::from(b.y));
+    max_x >= -4.
+        && min_x <= f32::from(viewport.width) + 4.
+        && max_y >= -4.
+        && min_y <= f32::from(viewport.height) + 4.
 }
 
 pub struct ParamRow {
@@ -189,6 +206,15 @@ impl NodeLayout {
 }
 
 pub fn node_layout(session: &Session, n: &GraphNode, graph: &Graph) -> NodeLayout {
+    let wired = graph.incoming(n.id).map(|e| e.to.port).collect();
+    node_layout_with_connections(session, n, &wired)
+}
+
+fn node_layout_with_connections(
+    session: &Session,
+    n: &GraphNode,
+    wired: &HashSet<u32>,
+) -> NodeLayout {
     let Some(ty) = session.registry.get(&n.type_id) else {
         return NodeLayout {
             height: HEADER_H + PORT_H + 8.0,
@@ -200,7 +226,6 @@ pub fn node_layout(session: &Session, n: &GraphNode, graph: &Graph) -> NodeLayou
     let n_param = ty.pin_params().count();
     let n_left = n_data + n_param;
     let n_out = ty.outputs.len();
-    let wired: HashSet<u32> = graph.incoming(n.id).map(|e| e.to.port).collect();
     let extra = if ty
         .params
         .iter()
@@ -520,6 +545,20 @@ pub fn node_intersects(
     n.x < maxx && n.x + NODE_W > minx && n.y < maxy && n.y + layout.height > miny
 }
 
+/// Cull in world space with screen-space overscan for handles, shadows and
+/// small viewport changes. Focused/dragged nodes are retained by the caller.
+pub fn node_visible(
+    n: &GraphNode,
+    layout: &NodeLayout,
+    cam: Camera,
+    viewport: Size<Pixels>,
+) -> bool {
+    let margin = px(64.);
+    let a = cam.screen_to_world(point(-margin, -margin));
+    let b = cam.screen_to_world(point(viewport.width + margin, viewport.height + margin));
+    node_intersects(n, layout, a.x, a.y, b.x, b.y)
+}
+
 pub fn hit_port(n: &GraphNode, world: Vec2, layout: &NodeLayout) -> Option<(bool, u32)> {
     let r = PORT_R + 4.0;
     for (i, &pin_y) in layout.in_ys.iter().enumerate() {
@@ -585,31 +624,169 @@ pub fn ports_ok(session: &Arc<Session>, from: PortRef, to: PortRef) -> bool {
         .unwrap_or(false)
 }
 
-pub fn collect_edges(session: &Arc<Session>, graph: &vf_core::Graph) -> Vec<FlowEdge> {
-    let mut edges = Vec::new();
-    for e in &graph.edges {
-        let Some(sn) = graph.node(e.from.node) else {
-            continue;
-        };
-        let Some(dn) = graph.node(e.to.node) else {
-            continue;
-        };
-        let color = session
-            .registry
-            .get(&sn.type_id)
-            .and_then(|t| t.outputs.get(e.from.port as usize))
-            .map(|p| rgb(tag_color(p.value_tag())).into())
-            .unwrap_or_else(|| rgb(0xb1b1b7).into());
-        let src = node_layout(session, sn, graph);
-        let dst = node_layout(session, dn, graph);
-        edges.push(FlowEdge {
-            x0: sn.x + NODE_W,
-            y0: sn.y + src.pin_y(false, e.from.port),
-            x1: dn.x,
-            y1: dn.y + dst.pin_y(true, e.to.port),
-            color,
-            dashed: false,
-        });
+pub struct NodeGeometry {
+    pub index: usize,
+    pub layout: NodeLayout,
+    pub connected: HashSet<u32>,
+}
+
+/// World-space geometry and connectivity, reused across camera/status changes.
+/// Build all node layouts once, then resolve each edge through the node index.
+pub struct GraphScene {
+    pub graph: Graph,
+    pub nodes: HashMap<NodeId, NodeGeometry>,
+    pub edges: Vec<FlowEdge>,
+}
+
+impl GraphScene {
+    pub fn new(session: &Session, graph: Graph) -> Self {
+        let mut connected: HashMap<NodeId, HashSet<u32>> = HashMap::new();
+        for e in &graph.edges {
+            connected.entry(e.to.node).or_default().insert(e.to.port);
+        }
+        let nodes: HashMap<_, _> = graph
+            .nodes
+            .iter()
+            .enumerate()
+            .map(|(index, n)| {
+                let connected = connected.remove(&n.id).unwrap_or_default();
+                let layout = node_layout_with_connections(session, n, &connected);
+                (
+                    n.id,
+                    NodeGeometry {
+                        index,
+                        layout,
+                        connected,
+                    },
+                )
+            })
+            .collect();
+        let edges = graph
+            .edges
+            .iter()
+            .filter_map(|e| {
+                let src = nodes.get(&e.from.node)?;
+                let dst = nodes.get(&e.to.node)?;
+                let sn = &graph.nodes[src.index];
+                let dn = &graph.nodes[dst.index];
+                let color = session
+                    .registry
+                    .get(&sn.type_id)
+                    .and_then(|t| t.outputs.get(e.from.port as usize))
+                    .map(|p| rgb(tag_color(p.value_tag())).into())
+                    .unwrap_or_else(|| rgb(0xb1b1b7).into());
+                Some(FlowEdge {
+                    x0: sn.x + NODE_W,
+                    y0: sn.y + src.layout.pin_y(false, e.from.port),
+                    x1: dn.x,
+                    y1: dn.y + dst.layout.pin_y(true, e.to.port),
+                    color,
+                    dashed: false,
+                })
+            })
+            .collect();
+        Self {
+            graph,
+            nodes,
+            edges,
+        }
     }
-    edges
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::prelude::v1::test;
+
+    #[test]
+    fn scene_tracks_wired_parameter_heights_and_moved_endpoints() {
+        let session = Session::boot(&[], None);
+        let mut graph = Graph::default();
+        let source = graph.add_node("vf.get.string", 0., 0., &session.registry);
+        let target = graph.add_node("vf.get.float", 400., 50., &session.registry);
+        let scene = GraphScene::new(&session, graph.clone());
+        let unwired_height = scene.nodes[&target].layout.height;
+        graph
+            .connect(
+                PortRef {
+                    node: source,
+                    port: 0,
+                },
+                PortRef {
+                    node: target,
+                    port: 0,
+                },
+                &session.registry,
+            )
+            .unwrap();
+        graph.node_mut(target).unwrap().x = 600.;
+        let scene = GraphScene::new(&session, graph.clone());
+        assert_eq!(
+            scene.nodes[&target].layout.height,
+            unwired_height - EDITOR_H
+        );
+        assert_eq!(scene.edges.len(), 1);
+        assert_eq!(scene.edges[0].x1, 600.);
+        assert!(scene.nodes[&target].connected.contains(&0));
+        graph.disconnect(PortRef {
+            node: target,
+            port: 0,
+        });
+        let scene = GraphScene::new(&session, graph);
+        assert_eq!(scene.nodes[&target].layout.height, unwired_height);
+        assert!(scene.edges.is_empty());
+    }
+
+    #[test]
+    fn node_culling_accounts_for_pan_zoom_and_partial_visibility() {
+        let session = Session::boot(&[], None);
+        let mut graph = Graph::default();
+        let id = graph.add_node("vf.get.float", 2000., 2000., &session.registry);
+        let mut n = graph.node(id).unwrap().clone();
+        let layout = node_layout(&session, &n, &graph);
+        let viewport = size(px(800.), px(600.));
+        assert!(!node_visible(&n, &layout, Camera::new(), viewport));
+        let zoomed = Camera {
+            pan: Vec2::new(0., 0.),
+            zoom: 0.2,
+        };
+        assert!(node_visible(&n, &layout, zoomed, viewport));
+        let panned = Camera {
+            pan: Vec2::new(-2000., -2000.),
+            zoom: 1.,
+        };
+        assert!(node_visible(&n, &layout, panned, viewport));
+        n.x = -NODE_W + 1.;
+        n.y = 0.;
+        assert!(node_visible(&n, &layout, Camera::new(), viewport));
+    }
+
+    #[test]
+    fn edge_culling_keeps_crossing_and_backward_curves() {
+        let viewport = size(px(800.), px(600.));
+        assert!(edge_visible(
+            point(px(-100.), px(200.)),
+            point(px(1000.), px(200.)),
+            1100.,
+            viewport
+        ));
+        assert!(edge_visible(
+            point(px(-10.), px(200.)),
+            point(px(-20.), px(300.)),
+            50.,
+            viewport
+        ));
+        assert!(!edge_visible(
+            point(px(-200.), px(200.)),
+            point(px(-150.), px(300.)),
+            50.,
+            viewport
+        ));
+        assert!(!edge_visible(
+            point(px(0.), px(-100.)),
+            point(px(500.), px(-100.)),
+            500.,
+            viewport
+        ));
+    }
 }

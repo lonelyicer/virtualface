@@ -53,17 +53,19 @@ pub(crate) fn bootstrap_archives(session: &Arc<Session>, unnamed: &str) -> Archi
             match read_archive_json(&meta.id) {
                 Ok(raw) => {
                     if let Err(e) = session.load_graph_str(&raw) {
-                        session
-                            .host
-                            .log
-                            .log(0, None, format!("failed to load archive {}: {e}", meta.name));
+                        session.host.log.log(
+                            0,
+                            None,
+                            format!("failed to load archive {}: {e}", meta.name),
+                        );
                     }
                 }
                 Err(e) => {
-                    session
-                        .host
-                        .log
-                        .log(0, None, format!("failed to read archive {}: {e}", meta.name));
+                    session.host.log.log(
+                        0,
+                        None,
+                        format!("failed to read archive {}: {e}", meta.name),
+                    );
                 }
             }
             index.current = meta.id.clone();
@@ -129,11 +131,18 @@ impl Workspace {
         if self.undo_stack.len() > MAX_UNDO {
             self.undo_stack.remove(0);
         }
-        self.persist_current_archive(cx);
+        if !self.archives.current.is_empty() {
+            self.autosave.save(
+                self.archives.current.clone(),
+                now,
+                self.session.engine.snapshot(),
+            );
+        }
         cx.notify();
     }
 
     fn persist_current_archive(&mut self, cx: &mut Context<Self>) {
+        self.autosave.flush();
         if self.archives.current.is_empty() {
             return;
         }
@@ -397,6 +406,7 @@ impl Workspace {
             return;
         };
         self.archive_menu_open = false;
+        self.autosave.flush();
         delete_archive_file(&meta.id);
         self.archives.items.retain(|item| item.id != meta.id);
         self.undo_stack.clear();

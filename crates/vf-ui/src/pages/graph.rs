@@ -1,6 +1,7 @@
 use crate::flow::{
-    self, FlowEdge, ParamRow, collect_edges, hit_node, hit_port, node_intersects, node_layout,
-    paint_background, paint_edge, paint_marquee, ports_ok, snapshot_node, try_connect,
+    self, FlowEdge, GraphScene, ParamRow, hit_node, hit_port, node_intersects, node_layout,
+    node_visible, paint_background, paint_edge, paint_marquee, ports_ok, snapshot_node,
+    try_connect,
 };
 use crate::i18n::{Locale, T, category_key, locale, t, t_loc, tf, tf_loc, var_type_key};
 use crate::theme::{
@@ -12,12 +13,11 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::searchable_list::SearchableListItem;
 use gpui_kit::component::select::{SearchableVec, Select, SelectEvent, SelectState};
-use gpui_kit::component::{
-    Disableable, Icon, IconName, IndexPath, Sizable, h_flex, v_flex,
-};
+use gpui_kit::component::{Disableable, Icon, IconName, IndexPath, Sizable, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 use std::collections::HashSet;
+use std::sync::Arc;
 use vf_core::{GraphVar, NodeId, PortRef, VarType};
 use vf_sdk::{Category, ParamKind};
 
@@ -737,11 +737,7 @@ impl Workspace {
                             .text_sm()
                             .child(name),
                     )
-                    .child(
-                        Icon::new(IconName::ChevronDown)
-                            .xsmall()
-                            .text_color(muted),
-                    ),
+                    .child(Icon::new(IconName::ChevronDown).xsmall().text_color(muted)),
             )
             .when(open, |this| {
                 this.child(
@@ -844,9 +840,11 @@ impl Workspace {
                                 Button::new("graph-import")
                                     .small()
                                     .label(t(cx, T::GraphImport))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.pick_and_import_graph(cx)
-                                    })),
+                                    .on_click(
+                                        cx.listener(|this, _, _, cx| {
+                                            this.pick_and_import_graph(cx)
+                                        }),
+                                    ),
                             )
                             .child(
                                 Button::new("graph-export")
@@ -996,14 +994,24 @@ impl Workspace {
         border: Hsla,
         muted: Hsla,
     ) -> impl IntoElement {
-        let graph = self.session.graph.lock().clone();
+        let scene = {
+            let graph = self.session.graph.lock();
+            if self
+                .graph_scene
+                .as_ref()
+                .is_none_or(|scene| scene.graph != *graph)
+            {
+                self.graph_scene = Some(Arc::new(GraphScene::new(&self.session, graph.clone())));
+            }
+            self.graph_scene.as_ref().unwrap().clone()
+        };
+        let graph = &scene.graph;
         let cam = self.camera;
         let drag = self.drag;
-        let selected = self.selected.clone();
         let session = self.session.clone();
         let snap = latest_snapshot(&self.session);
         let this = cx.weak_entity();
-        let mut edges = collect_edges(&session, &graph);
+        let mut wire = None;
         if let Drag::Wire {
             from,
             output,
@@ -1011,13 +1019,13 @@ impl Workspace {
         } = drag
         {
             if let Some(sn) = graph.node(from.node) {
-                let py = sn.y + node_layout(&session, sn, &graph).pin_y(!output, from.port);
+                let py = sn.y + scene.nodes[&sn.id].layout.pin_y(!output, from.port);
                 let (x0, y0, x1, y1) = if output {
                     (sn.x + NODE_W, py, current.x, current.y)
                 } else {
                     (current.x, current.y, sn.x, py)
                 };
-                edges.push(FlowEdge {
+                wire = Some(FlowEdge {
                     x0,
                     y0,
                     x1,
@@ -1028,15 +1036,28 @@ impl Workspace {
             }
         }
 
+        let focused_nodes: HashSet<u64> = self
+            .pin_inputs
+            .iter()
+            .filter(|(_, state)| state.focus_handle(cx).contains_focused(window, cx))
+            .map(|((id, _), _)| *id)
+            .collect();
         let mut node_els: Vec<AnyElement> = Vec::new();
         for n in &graph.nodes {
-            let (rows, buttons) = self.param_rows_for(n, window, cx);
+            let geometry = &scene.nodes[&n.id];
+            let keep_interactive = focused_nodes.contains(&n.id.0)
+                || (matches!(drag, Drag::Nodes { .. }) && self.selected.contains(&n.id));
+            if !keep_interactive && !node_visible(n, &geometry.layout, cam, self.canvas_bounds.size)
+            {
+                continue;
+            }
+            let (rows, buttons) = self.param_rows_for(n, &geometry.connected, window, cx);
             node_els.push(
                 snapshot_node(
                     &session,
                     n,
                     &snap,
-                    selected.contains(&n.id),
+                    self.selected.contains(&n.id),
                     cam,
                     rows,
                     buttons,
@@ -1109,14 +1130,18 @@ impl Workspace {
             .child(
                 canvas(
                     move |bounds, _, cx| {
-                        this.update(cx, |ws, _| {
+                        this.update(cx, |ws, cx| {
+                            if ws.canvas_bounds.size != bounds.size {
+                                // Re-evaluate culling after layout establishes a new viewport.
+                                cx.notify();
+                            }
                             ws.canvas_bounds = bounds;
                         })
                         .ok();
                     },
                     move |bounds, _, window, _| {
                         paint_background(window, bounds, cam, muted.opacity(0.45));
-                        for e in &edges {
+                        for e in scene.edges.iter().chain(wire.iter()) {
                             paint_edge(window, bounds, cam, e);
                         }
                         if let Drag::Marquee { start, current, .. } = drag {
@@ -1623,19 +1648,13 @@ impl Workspace {
     fn param_rows_for(
         &mut self,
         n: &vf_core::GraphNode,
+        connected: &HashSet<u32>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> (Vec<ParamRow>, Vec<AnyElement>) {
         let Some(ty) = self.session.registry.get(&n.type_id).cloned() else {
             return (Vec::new(), Vec::new());
         };
-        let connected: HashSet<u32> = self
-            .session
-            .graph
-            .lock()
-            .incoming(n.id)
-            .map(|e| e.to.port)
-            .collect();
         let mut rows = Vec::new();
         let mut buttons = Vec::new();
         for (i, p) in ty.pin_params().enumerate() {

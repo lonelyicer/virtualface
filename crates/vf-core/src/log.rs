@@ -53,6 +53,13 @@ impl LogLine {
     }
 }
 
+/// A consistent slice of the log, including the retention boundary for consumers.
+pub struct LogUpdate {
+    pub seq: u64,
+    pub retained_from: u64,
+    pub lines: Vec<(u64, LogLine)>,
+}
+
 #[derive(Clone, Default)]
 pub struct LogBus {
     inner: Arc<Mutex<VecDeque<LogLine>>>,
@@ -74,7 +81,8 @@ impl LogBus {
             g.pop_front();
         }
         g.push_back(line);
-        drop(g);
+        // Publish the cursor while holding the same lock as the buffer so an
+        // incremental reader cannot associate lines with the wrong sequence.
         self.seq.fetch_add(1, Ordering::Release);
     }
 
@@ -92,6 +100,25 @@ impl LogBus {
 
     pub fn snapshot(&self) -> Vec<LogLine> {
         self.inner.lock().iter().cloned().collect()
+    }
+
+    pub fn snapshot_since(&self, after: u64) -> LogUpdate {
+        let lines = self.inner.lock();
+        let seq = self.seq.load(Ordering::Relaxed);
+        let retained_from = seq - lines.len() as u64 + 1;
+        let skip = after
+            .saturating_sub(retained_from - 1)
+            .min(lines.len() as u64) as usize;
+        LogUpdate {
+            seq,
+            retained_from,
+            lines: lines
+                .iter()
+                .enumerate()
+                .skip(skip)
+                .map(|(i, line)| (retained_from + i as u64, line.clone()))
+                .collect(),
+        }
     }
 }
 
@@ -138,6 +165,62 @@ pub fn level_name(level: u32) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn incremental_reads_handle_retention_and_identical_timestamps() {
+        let bus = LogBus::new();
+        let empty = bus.snapshot_since(0);
+        assert_eq!(empty.seq, 0);
+        assert!(empty.lines.is_empty());
+        for i in 0..CAP + 3 {
+            bus.push(LogLine {
+                ts_us: 1,
+                level: 2,
+                node: None,
+                plugin: None,
+                message: i.to_string(),
+            });
+        }
+        let update = bus.snapshot_since(0);
+        assert_eq!(update.retained_from, 4);
+        assert_eq!(update.lines.len(), CAP);
+        assert_eq!(update.lines[0].0, 4);
+        assert_eq!(update.lines[0].1.message, "3");
+        let tail = bus.snapshot_since(update.seq - 1);
+        assert_eq!(tail.lines.len(), 1);
+        assert_eq!(tail.lines[0].0, update.seq);
+        assert!(bus.snapshot_since(update.seq).lines.is_empty());
+    }
+
+    #[test]
+    fn concurrent_reads_observe_consistent_buffer_cursors() {
+        let bus = LogBus::new();
+        let other = bus.clone();
+        let writer = std::thread::spawn(move || {
+            for i in 1..2000 {
+                other.push(LogLine {
+                    ts_us: 1,
+                    level: 2,
+                    node: None,
+                    plugin: None,
+                    message: i.to_string(),
+                });
+            }
+        });
+        let mut cursor = 0;
+        while cursor < 1999 {
+            let update = bus.snapshot_since(cursor);
+            for (seq, line) in &update.lines {
+                assert_eq!(*seq, line.message.parse::<u64>().unwrap());
+            }
+            if let Some((last, _)) = update.lines.last() {
+                assert_eq!(*last, update.seq);
+            }
+            cursor = update.seq;
+            std::thread::yield_now();
+        }
+        writer.join().unwrap();
+    }
 
     #[test]
     fn format_unix_epoch() {
