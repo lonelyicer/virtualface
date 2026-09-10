@@ -408,6 +408,10 @@ pub fn node(
                                 .items_center()
                                 .child(
                                     div()
+                                        .id(SharedString::from(format!(
+                                            "rf-node-{}-st-{level}",
+                                            n.id.0
+                                        )))
                                         .w(px(7.))
                                         .h(px(7.))
                                         .rounded_full()

@@ -272,6 +272,7 @@ pub struct NodeSnap {
 #[derive(Clone, Debug)]
 pub struct Snapshot {
     pub tick: u64,
+    /// Duration of the last engine tick, in microseconds.
     pub dt_us: u64,
     pub running: bool,
     pub drops: u64,

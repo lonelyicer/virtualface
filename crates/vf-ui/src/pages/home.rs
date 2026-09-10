@@ -205,6 +205,10 @@ fn plugin_row(
                 .items_center()
                 .child(
                     div()
+                        .id(SharedString::from(format!(
+                            "home-plugin-{i}-st-{}",
+                            plugin.status
+                        )))
                         .w(px(8.))
                         .h(px(8.))
                         .rounded_full()

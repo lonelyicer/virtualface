@@ -58,6 +58,10 @@ pub struct Workspace {
     pub(crate) log_scroll: ScrollHandle,
     pub(crate) log_len: usize,
     pub(crate) log_tail_ts: u64,
+    live_ui_pumping: bool,
+    ui_snap_tick: u64,
+    ui_snap_running: bool,
+    ui_log_seq: u64,
     pub(crate) license_scroll: VirtualListScrollHandle,
     pub(crate) license_expanded: Option<LicenseId>,
     pub(crate) language_select: Entity<SelectState<SearchableVec<Locale>>>,
@@ -67,24 +71,6 @@ pub struct Workspace {
 
 impl Workspace {
     pub fn new(session: Arc<Session>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(33))
-                    .await;
-                if this
-                    .update(cx, |this, cx| {
-                        if matches!(this.page, AppPage::Home | AppPage::Graph | AppPage::Log) {
-                            cx.notify();
-                        }
-                    })
-                    .is_err()
-                {
-                    break;
-                }
-            }
-        })
-        .detach();
         let locales: Vec<Locale> = Locale::all().collect();
         let current = locale(cx);
         let selected = locales.iter().position(|l| *l == current).unwrap_or(0);
@@ -136,6 +122,10 @@ impl Workspace {
             log_scroll: ScrollHandle::default(),
             log_len: 0,
             log_tail_ts: 0,
+            live_ui_pumping: false,
+            ui_snap_tick: 0,
+            ui_snap_running: false,
+            ui_log_seq: 0,
             license_scroll: VirtualListScrollHandle::new(),
             license_expanded: None,
             language_select,
@@ -158,6 +148,61 @@ impl Workspace {
 
     pub(crate) fn note(&self, level: u32, msg: impl Into<String>) {
         self.session.host.log.log(level, None, msg);
+    }
+
+    fn wants_live_frames(&self) -> bool {
+        match self.page {
+            AppPage::Home | AppPage::Graph => self.session.engine.snapshot().running,
+            AppPage::Log => true,
+            AppPage::Settings | AppPage::Licenses => false,
+        }
+    }
+
+    fn sync_live_ui_cursors(&mut self) {
+        let snap = self.session.engine.snapshot();
+        self.ui_snap_tick = snap.tick;
+        self.ui_snap_running = snap.running;
+        self.ui_log_seq = self.session.host.log.seq();
+    }
+
+    fn consume_live_ui_dirty(&mut self) -> bool {
+        let snap = self.session.engine.snapshot();
+        let log_seq = self.session.host.log.seq();
+        let snap_changed =
+            snap.tick != self.ui_snap_tick || snap.running != self.ui_snap_running;
+        let log_changed = log_seq != self.ui_log_seq;
+        self.ui_snap_tick = snap.tick;
+        self.ui_snap_running = snap.running;
+        self.ui_log_seq = log_seq;
+        match self.page {
+            AppPage::Home | AppPage::Graph => snap_changed,
+            AppPage::Log => log_changed,
+            AppPage::Settings | AppPage::Licenses => false,
+        }
+    }
+
+    fn ensure_live_ui_pump(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.live_ui_pumping || !self.wants_live_frames() {
+            return;
+        }
+        self.live_ui_pumping = true;
+        self.sync_live_ui_cursors();
+        cx.on_next_frame(window, |this, window, cx| {
+            this.on_live_ui_frame(window, cx);
+        });
+    }
+
+    fn on_live_ui_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.consume_live_ui_dirty() {
+            cx.notify();
+        }
+        if self.wants_live_frames() {
+            cx.on_next_frame(window, |this, window, cx| {
+                this.on_live_ui_frame(window, cx);
+            });
+        } else {
+            self.live_ui_pumping = false;
+        }
     }
 
     pub(crate) fn start_engine(&mut self, cx: &mut Context<Self>) {
@@ -204,6 +249,7 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.ensure_live_ui_pump(window, cx);
         let theme = cx.theme().clone();
         let bg = theme.background;
         let fg = theme.foreground;

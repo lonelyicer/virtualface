@@ -5,7 +5,7 @@
 ///     id: "vf.pico",
 ///     name: "PICO Input",
 ///     version: "0.1.0",
-///     nodes: [PicoUdpSource, SyntheticSource]
+///     nodes: [PicoUdpSource]
 /// }
 /// ```
 #[macro_export]

@@ -199,6 +199,14 @@ impl UnifiedExpression {
         self as usize
     }
 
+    /// Eyelid blendshapes that belong with [`crate::VfEyeData`] (gaze / openness / pupil).
+    pub const fn is_eye(self) -> bool {
+        matches!(
+            self,
+            Self::EyeSquintRight | Self::EyeSquintLeft | Self::EyeWideRight | Self::EyeWideLeft
+        )
+    }
+
     pub fn from_name(name: &str) -> Option<Self> {
         Self::ALL.iter().copied().find(|e| e.name() == name)
     }

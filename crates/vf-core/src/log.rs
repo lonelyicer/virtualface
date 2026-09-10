@@ -2,6 +2,7 @@ use parking_lot::Mutex;
 use std::cell::Cell;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const CAP: usize = 500;
@@ -55,11 +56,16 @@ impl LogLine {
 #[derive(Clone, Default)]
 pub struct LogBus {
     inner: Arc<Mutex<VecDeque<LogLine>>>,
+    seq: Arc<AtomicU64>,
 }
 
 impl LogBus {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn seq(&self) -> u64 {
+        self.seq.load(Ordering::Acquire)
     }
 
     pub fn push(&self, line: LogLine) {
@@ -68,6 +74,8 @@ impl LogBus {
             g.pop_front();
         }
         g.push_back(line);
+        drop(g);
+        self.seq.fetch_add(1, Ordering::Release);
     }
 
     pub fn log(&self, level: u32, node: Option<u64>, message: impl Into<String>) {
@@ -142,6 +150,15 @@ mod tests {
             format_ts(1_789_023_372_123_456),
             "2026-09-10T06:56:12.123456Z"
         );
+    }
+
+    #[test]
+    fn seq_advances_on_push() {
+        let bus = LogBus::new();
+        assert_eq!(bus.seq(), 0);
+        bus.log(2, None, "a");
+        bus.log(2, None, "b");
+        assert_eq!(bus.seq(), 2);
     }
 
     #[test]

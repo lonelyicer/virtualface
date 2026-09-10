@@ -31,6 +31,10 @@ mod tests {
             UnifiedExpression::from_name("JawOpen"),
             Some(UnifiedExpression::JawOpen)
         );
+        assert!(UnifiedExpression::EyeSquintLeft.is_eye());
+        assert!(UnifiedExpression::EyeWideRight.is_eye());
+        assert!(!UnifiedExpression::JawOpen.is_eye());
+        assert!(!UnifiedExpression::NeckFlexLeft.is_eye());
     }
 
     #[cfg(target_pointer_width = "64")]

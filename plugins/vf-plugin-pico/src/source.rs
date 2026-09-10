@@ -29,7 +29,7 @@ pub struct PicoUdpSource {
 
 impl Node for PicoUdpSource {
     fn descriptor() -> NodeDescriptor {
-        NodeDescriptor::new("pico.udp_source", "PICO UDP Source", Category::Input)
+        NodeDescriptor::new("pico.udp_source", "PICO Connect Source", Category::Input)
             .source()
             .output(PortDesc::unified("unified"))
             .output(PortDesc::float("timeout"))
@@ -65,6 +65,7 @@ impl Node for PicoUdpSource {
         if let Some(h) = self.thread.take() {
             let _ = h.join();
         }
+        *self.slot.latest.lock().unwrap() = None;
     }
 
     fn process(&mut self, ctx: &ProcessCtx, io: &mut PortIo<'_>) -> Result<()> {

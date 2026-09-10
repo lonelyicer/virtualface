@@ -10,7 +10,7 @@ use std::ffi::c_void;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
-use vf_abi::{VfHostApi, VfProcessCtx, VfValue, VfValueTag};
+use vf_abi::{VF_STATUS_IDLE, VfHostApi, VfProcessCtx, VfValue, VfValueTag};
 
 const ENGINE_RATE_HZ: f32 = 100.0;
 
@@ -47,6 +47,7 @@ struct EngineInner {
     tick: u64,
     drops: u64,
     last_now: u64,
+    last_dt_us: u64,
 }
 
 pub struct EngineHandle {
@@ -85,6 +86,12 @@ impl EngineHandle {
         }
         let mut snap = (*cur).clone();
         snap.running = running;
+        if !running {
+            for node in snap.nodes.values_mut() {
+                node.status_level = VF_STATUS_IDLE;
+                node.status_text.clear();
+            }
+        }
         self.snapshot.store(Arc::new(snap));
     }
 
@@ -150,6 +157,7 @@ pub fn spawn_engine(registry: NodeRegistry, log: LogBus) -> EngineHandle {
                 tick: 0,
                 drops: 0,
                 last_now: now_us(),
+                last_dt_us: (1_000_000.0 / ENGINE_RATE_HZ) as u64,
             };
             engine_loop(&mut inner, cmd_rx, snap, wake_t);
         })
@@ -198,6 +206,7 @@ fn handle_cmd(inner: &mut EngineInner, cmd: EngineCommand) -> bool {
         EngineCommand::Shutdown => return false,
         EngineCommand::Start => {
             inner.running = true;
+            inner.last_now = now_us();
             start_all(inner);
             inner.host_state.log.log(2, None, "engine running");
         }
@@ -344,6 +353,7 @@ fn run_tick(inner: &mut EngineInner) {
     let now = now_us();
     let dt = now.saturating_sub(inner.last_now).max(1);
     inner.last_now = now;
+    inner.last_dt_us = dt;
     inner.tick += 1;
     let ctx = VfProcessCtx {
         tick: inner.tick,
@@ -537,12 +547,17 @@ fn publish(inner: &EngineInner, snapshot: &ArcSwap<Snapshot>) {
                 .unwrap_or(st.message.len());
             String::from_utf8_lossy(&st.message[..end]).into_owned()
         };
+        let (status_level, status_text) = if inner.running {
+            (st.level, msg)
+        } else {
+            (VF_STATUS_IDLE, String::new())
+        };
         let outputs: Vec<SnapshotValue> = rt.out_vals.iter().map(snapshot_value).collect();
         nodes.insert(
             id.0,
             crate::instance::NodeSnap {
-                status_level: st.level,
-                status_text: msg,
+                status_level,
+                status_text,
                 outputs,
                 disabled: rt.instance.disabled,
                 state: None,
@@ -551,7 +566,7 @@ fn publish(inner: &EngineInner, snapshot: &ArcSwap<Snapshot>) {
     }
     snapshot.store(Arc::new(Snapshot {
         tick: inner.tick,
-        dt_us: inner.last_now,
+        dt_us: inner.last_dt_us,
         running: inner.running,
         drops: inner.drops,
         last_tick_us: inner.last_now,

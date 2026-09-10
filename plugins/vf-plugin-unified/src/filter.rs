@@ -1,4 +1,4 @@
-//! 1€ filter using real dt (VRCFT `Filter.cs` used a fixed 10 Hz).
+//! One Euro filter using real dt (VRCFT `Filter.cs` used a fixed 10 Hz).
 
 use vf_abi::{VF_UNIFIED_SHAPE_COUNT, VfUnifiedFrame};
 use vf_sdk::{
@@ -111,7 +111,7 @@ impl OneEuroFilter {
 
 impl Node for OneEuroFilter {
     fn descriptor() -> NodeDescriptor {
-        NodeDescriptor::new("unified.one_euro", "1€ Filter", Category::Process)
+        NodeDescriptor::new("unified.one_euro", "One Euro Filter", Category::Process)
             .input(PortDesc::unified("in"))
             .output(PortDesc::unified("out"))
             .param(ParamDef::float(
@@ -158,7 +158,7 @@ impl Node for OneEuroFilter {
     }
 
     fn status(&self) -> NodeStatus {
-        NodeStatus::ok(format!("1€ β={:.2}", self.beta))
+        NodeStatus::ok(format!("beta {:.2}", self.beta))
     }
 }
 
