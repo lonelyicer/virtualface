@@ -4,13 +4,12 @@ use crate::workspace::Workspace;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::select::Select;
-use gpui_kit::component::{Sizable, h_flex, v_flex};
+use gpui_kit::component::v_flex;
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 
 impl Workspace {
     pub(crate) fn settings_page(&self, cx: &mut Context<Self>, muted: Hsla) -> impl IntoElement {
-        let rate = self.session.graph.lock().rate_hz;
         v_flex()
             .id("settings-page")
             .flex_1()
@@ -32,28 +31,6 @@ impl Workspace {
                                 .w_full()
                                 .menu_width(px(240.)),
                         ),
-                    ),
-            )
-            .child(
-                GroupBox::new()
-                    .id("set-engine")
-                    .outline()
-                    .title(t(cx, T::SettingsEngineRate))
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .child(
-                                Button::new("rate-dec").small().label("−").on_click(
-                                    cx.listener(|this, _, _, cx| this.bump_rate(-5.0, cx)),
-                                ),
-                            )
-                            .child(div().w(px(72.)).child(format!("{rate:.0} Hz")))
-                            .child(
-                                Button::new("rate-inc").small().label("+").on_click(
-                                    cx.listener(|this, _, _, cx| this.bump_rate(5.0, cx)),
-                                ),
-                            ),
                     ),
             )
             .child(

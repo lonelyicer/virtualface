@@ -95,7 +95,6 @@ fn builtin_type(
         type_id: type_id.into(),
         display_name: display.into(),
         category: Category::Utility,
-        flags: 0,
         inputs,
         outputs,
         params: vec![ParamDef::string("name", "Name", "")],

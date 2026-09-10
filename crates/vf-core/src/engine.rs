@@ -12,13 +12,14 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use vf_abi::{VfHostApi, VfProcessCtx, VfValue, VfValueTag};
 
-pub enum EngineCommand {
+const ENGINE_RATE_HZ: f32 = 100.0;
+
+pub(crate) enum EngineCommand {
     SwapPlan(ExecPlan, Graph),
     SetParam(NodeId, String, serde_json::Value),
     Start,
     Stop,
     Shutdown,
-    TickOnce,
 }
 
 struct HostState {
@@ -56,12 +57,12 @@ pub struct EngineHandle {
 }
 
 impl EngineHandle {
-    pub fn send(&self, cmd: EngineCommand) {
+    fn send(&self, cmd: EngineCommand) {
         let _ = self.cmd_tx.send(cmd);
         self.wake_now();
     }
 
-    pub fn wake_now(&self) {
+    fn wake_now(&self) {
         let (lock, cv) = &*self.wake;
         *lock.lock() = true;
         cv.notify_one();
@@ -100,10 +101,6 @@ impl EngineHandle {
 
     pub fn set_param(&self, id: NodeId, key: String, value: serde_json::Value) {
         self.send(EngineCommand::SetParam(id, key, value));
-    }
-
-    pub fn tick_once(&self) {
-        self.send(EngineCommand::TickOnce);
     }
 
     pub fn snapshot(&self) -> Arc<Snapshot> {
@@ -147,7 +144,6 @@ pub fn spawn_engine(registry: NodeRegistry, log: LogBus) -> EngineHandle {
                 plan: ExecPlan {
                     order: vec![],
                     bindings: HashMap::new(),
-                    rate_hz: 100.0,
                 },
                 graph: Graph::default(),
                 running: false,
@@ -181,28 +177,19 @@ fn engine_loop(
                 return;
             }
         }
-        let mut force = false;
         if inner.running {
             run_tick(inner);
             publish(inner, &snapshot);
         } else if was_running {
             publish(inner, &snapshot);
         }
-        let period = Duration::from_secs_f32(1.0 / inner.plan.rate_hz.max(1.0));
+        let period = Duration::from_secs_f32(1.0 / ENGINE_RATE_HZ);
         let (lock, cv) = &*wake;
         let mut signaled = lock.lock();
         if !*signaled {
             let _ = cv.wait_for(&mut signaled, period);
         }
-        if *signaled {
-            force = true;
-            *signaled = false;
-        }
-        drop(signaled);
-        if force && inner.running {
-            // extra tick already handled next loop; drain commands first
-        }
-        let _ = force;
+        *signaled = false;
     }
 }
 
@@ -218,9 +205,6 @@ fn handle_cmd(inner: &mut EngineInner, cmd: EngineCommand) -> bool {
             inner.running = false;
             stop_all(inner);
             inner.host_state.log.log(2, None, "engine stopped");
-        }
-        EngineCommand::TickOnce => {
-            run_tick(inner);
         }
         EngineCommand::SetParam(id, key, value) => {
             if let Some(n) = inner.nodes.get_mut(&id) {
@@ -612,11 +596,4 @@ unsafe extern "C" fn host_wake(user: *mut c_void, _node_handle: u64) {
 
 unsafe extern "C" fn host_now_us(_user: *mut c_void) -> u64 {
     now_us()
-}
-
-pub fn collect_states(graph: &mut Graph, handle: &EngineHandle) {
-    // Engine owns instances; we cannot reach them from the handle except via commands.
-    // Persist happens on swap: graph already holds last known params; states are pulled
-    // on demand by the UI before save through a dedicated snapshot field later.
-    let _ = (graph, handle);
 }

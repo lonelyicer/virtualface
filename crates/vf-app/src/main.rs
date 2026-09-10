@@ -8,8 +8,8 @@ use std::time::Duration;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 use vf_core::{
-    Graph, LogBus, PluginHost, Session, absolute_path, default_plugin_dirs, graph_from_json,
-    last_graph_path, remember_last_graph,
+    Graph, LogBus, Session, absolute_path, default_plugin_dirs, graph_from_json, last_graph_path,
+    load_archive_index, read_archive_json,
 };
 
 use crate::log_layer::LogBusLayer;
@@ -26,9 +26,6 @@ struct Cli {
     /// Run the engine without opening a window.
     #[arg(long)]
     headless: bool,
-    /// Engine tick rate (Hz).
-    #[arg(long, default_value_t = 100.0)]
-    rate: f32,
 }
 
 fn main() {
@@ -52,15 +49,17 @@ fn main() {
     let mut dirs = cli.plugins_dir.clone();
     dirs.extend(default_plugin_dirs());
 
-    let startup_path = cli.graph.clone().or_else(last_graph_path);
     let mut loaded = Graph::default();
-    let mut resolved_path = None;
-    if let Some(path) = startup_path {
+    let mut file_path = None;
+    let mut archive_id = None;
+    let mut graph_label = String::new();
+    if let Some(path) = cli.graph.clone() {
         match std::fs::read_to_string(&path) {
             Ok(s) => match graph_from_json(&s) {
                 Ok(g) => {
                     loaded = g;
-                    resolved_path = Some(path);
+                    graph_label = path.display().to_string();
+                    file_path = Some(path);
                 }
                 Err(e) => {
                     log.log(
@@ -78,17 +77,65 @@ fn main() {
                 );
             }
         }
-    }
-    if cli.rate > 0.0 {
-        loaded.rate_hz = cli.rate;
+    } else {
+        let index = load_archive_index();
+        if let Some(meta) = index.current_meta() {
+            match read_archive_json(&meta.id) {
+                Ok(s) => match graph_from_json(&s) {
+                    Ok(g) => {
+                        loaded = g;
+                        graph_label = meta.name.clone();
+                        archive_id = Some(meta.id.clone());
+                    }
+                    Err(e) => {
+                        log.log(
+                            0,
+                            None,
+                            format!("failed to parse archive {}: {e}", meta.name),
+                        );
+                    }
+                }
+                Err(e) => {
+                    log.log(
+                        0,
+                        None,
+                        format!("failed to read archive {}: {e}", meta.name),
+                    );
+                }
+            }
+        } else if let Some(path) = last_graph_path() {
+            match std::fs::read_to_string(&path) {
+                Ok(s) => match graph_from_json(&s) {
+                    Ok(g) => {
+                        loaded = g;
+                        graph_label = path.display().to_string();
+                        file_path = Some(path);
+                    }
+                    Err(e) => {
+                        log.log(
+                            0,
+                            None,
+                            format!("failed to parse graph {}: {e}", path.display()),
+                        );
+                    }
+                }
+                Err(e) => {
+                    log.log(
+                        0,
+                        None,
+                        format!("failed to read graph {}: {e}", path.display()),
+                    );
+                }
+            }
+        }
     }
 
     let session = Session::boot_with_log(&dirs, Some(loaded), log);
-    if let Some(path) = resolved_path {
+    if let Some(path) = file_path {
         *session.graph_path.lock() = absolute_path(&path).display().to_string();
-        remember_last_graph(&path);
+    } else if let Some(id) = archive_id {
+        *session.graph_path.lock() = id;
     }
-    let graph_label = session.graph_path.lock().clone();
     session.host.log.log(
         2,
         None,
@@ -137,9 +184,4 @@ fn run_gui(session: Session) {
         vf_ui::init(cx);
         vf_ui::open_workspace(session, cx);
     });
-}
-
-#[allow(dead_code)]
-fn _host() -> PluginHost {
-    PluginHost::new(vf_core::LogBus::new())
 }

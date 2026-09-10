@@ -42,7 +42,6 @@ pub struct NodeType {
     pub type_id: String,
     pub display_name: String,
     pub category: Category,
-    pub flags: u32,
     pub inputs: Vec<PortType>,
     pub outputs: Vec<PortType>,
     pub params: Vec<ParamDef>,
@@ -55,17 +54,8 @@ pub struct NodeType {
 }
 
 impl NodeType {
-    pub fn is_source(&self) -> bool {
-        self.flags & vf_abi::VF_NODE_IS_SOURCE != 0
-            || (self.inputs.is_empty() && matches!(self.category, Category::Input))
-    }
-
     pub fn pin_params(&self) -> impl Iterator<Item = &ParamDef> {
         self.params.iter().filter(|p| p.kind != ParamKind::Button)
-    }
-
-    pub fn left_pin_count(&self) -> usize {
-        self.inputs.len() + self.pin_params().count()
     }
 
     pub fn param_kind_tag(kind: ParamKind) -> Option<VfValueTag> {
@@ -90,11 +80,6 @@ impl NodeType {
     pub fn param_key_for_port(&self, port: u32) -> Option<&str> {
         let i = (port as usize).checked_sub(self.inputs.len())?;
         self.pin_params().nth(i).map(|p| p.key.as_str())
-    }
-
-    pub fn param_def_for_port(&self, port: u32) -> Option<&ParamDef> {
-        let i = (port as usize).checked_sub(self.inputs.len())?;
-        self.pin_params().nth(i)
     }
 
     pub fn input_is_wirable(&self, port: u32) -> bool {
@@ -122,7 +107,6 @@ impl NodeType {
             type_id: unsafe { cstr(d.type_id) },
             display_name: unsafe { cstr(d.display_name) },
             category: Category::from(d.category),
-            flags: d.flags,
             inputs,
             outputs,
             params,
@@ -175,19 +159,5 @@ impl NodeRegistry {
 
     pub fn all(&self) -> &[NodeType] {
         &self.types
-    }
-
-    pub fn by_category(&self, cat: Category) -> impl Iterator<Item = &NodeType> {
-        self.types.iter().filter(move |t| t.category == cat)
-    }
-}
-
-#[allow(dead_code)]
-pub fn category_from_u32(v: u32) -> Category {
-    match v {
-        0 => Category::Input,
-        1 => Category::Process,
-        2 => Category::Output,
-        _ => Category::Utility,
     }
 }

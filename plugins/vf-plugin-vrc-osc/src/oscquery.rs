@@ -296,18 +296,16 @@ fn refresh_avatar(state: &Arc<Mutex<HubState>>, host: &Host, logged_id: &mut Str
                 cfg.addresses.len()
             ));
         }
-        commit_avatar(state, qh.0, qh.1, cfg.id, cfg.addresses, &cfg.name);
+        commit_avatar(state, cfg.id, cfg.addresses, &cfg.name);
         return;
     }
     if !query_params.is_empty() || !query_id.is_empty() {
-        commit_avatar(state, qh.0, qh.1, query_id, query_params, "");
+        commit_avatar(state, query_id, query_params, "");
     }
 }
 
 fn commit_avatar(
     state: &Arc<Mutex<HubState>>,
-    _host: &str,
-    _port: u16,
     id: String,
     params: HashSet<String>,
     avatar_name: &str,
@@ -563,13 +561,6 @@ pub fn avatar_id(node: &Value) -> String {
         .to_string()
 }
 
-pub fn param_matches(params: &HashSet<String>, name: &str, prefix: &str) -> bool {
-    if find_param_address(params, name).is_some() {
-        return true;
-    }
-    params.contains(&format!("{prefix}{name}"))
-}
-
 fn param_leaf(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
@@ -654,8 +645,8 @@ mod tests {
         let p = collect_typed_paths(&v);
         assert!(p.contains("/avatar/parameters/v2/JawOpen"));
         assert!(p.contains("/avatar/parameters/EyeTrackingActive"));
-        assert!(param_matches(&p, "v2/JawOpen", "/avatar/parameters/"));
-        assert!(!param_matches(&p, "v2/TongueOut", "/avatar/parameters/"));
+        assert!(find_param_address(&p, "v2/JawOpen").is_some());
+        assert!(find_param_address(&p, "v2/TongueOut").is_none());
         assert!(!needs_native_gaze(&p));
         assert!(!needs_native_lid(&p));
     }

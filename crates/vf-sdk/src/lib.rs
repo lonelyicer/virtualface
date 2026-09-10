@@ -13,8 +13,8 @@ pub use host::{Host, NodeStatus, NodeStatusKind, ProcessCtx};
 pub use node::Node;
 pub use ports::PortIo;
 pub use vf_abi::{
-    ARKIT_BLENDSHAPE_COUNT, PICO_BLENDSHAPE_COUNT, UnifiedExpression, UnifiedSimpleExpression, VF_NODE_IS_SOURCE, VF_UNIFIED_SHAPE_COUNT,
-    VF_VALID_EXPR, VF_VALID_EYE, VF_VALID_HEAD, VISEME_COUNT, VfUnifiedFrame, VfValueTag,
+    UnifiedExpression, UnifiedSimpleExpression, VF_NODE_IS_SOURCE, VF_UNIFIED_SHAPE_COUNT,
+    VF_VALID_EXPR, VF_VALID_EYE, VF_VALID_HEAD, VfUnifiedFrame, VfValueTag,
 };
 
 pub fn json_f64(v: &serde_json::Value, default: f64) -> f64 {
@@ -31,10 +31,6 @@ pub fn json_i64(v: &serde_json::Value, default: i64) -> i64 {
 
 pub fn json_bool(v: &serde_json::Value, default: bool) -> bool {
     v.as_bool().unwrap_or(default)
-}
-
-pub fn json_str(v: &serde_json::Value) -> Option<&str> {
-    v.as_str()
 }
 
 pub fn param_f32(config: &serde_json::Value, key: &str, default: f32) -> f32 {

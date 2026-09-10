@@ -1,5 +1,6 @@
 //! VirtualFace gpui-kit UI.
 
+mod archives;
 mod chrome;
 mod flow;
 mod i18n;

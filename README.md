@@ -13,7 +13,7 @@ cargo run -p vf-app -- --headless --graph examples/graphs/pico_to_vrchat.vfgraph
 cargo run -p vf-app -- --plugins-dir ./my-plugins --headless
 ```
 
-CLI flags: `--plugins-dir`, `--graph`, `--headless`, `--rate` (Hz, default 100).
+CLI flags: `--plugins-dir`, `--graph`, `--headless`.
 
 On Fedora/RHEL, GUI linking needs `libxkbcommon-x11`. The runtime `.so.0` is enough; `libxkbcommon-x11-devel` is the usual package if you prefer not to rely on the app `build.rs` workaround.
 

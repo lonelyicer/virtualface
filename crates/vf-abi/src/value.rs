@@ -108,10 +108,6 @@ impl VfUnifiedFrame {
     pub fn set_shape(&mut self, expr: crate::unified::UnifiedExpression, value: f32) {
         self.shapes[expr.index()] = value;
     }
-
-    pub fn copy_from(&mut self, other: &Self) {
-        *self = *other;
-    }
 }
 
 #[repr(C)]

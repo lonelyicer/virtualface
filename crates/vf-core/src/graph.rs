@@ -2,7 +2,7 @@ use crate::error::{CoreError, Result};
 use crate::registry::NodeRegistry;
 use crate::vars::GraphVar;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use vf_abi::ports_compatible;
 use vf_sdk::defaults_from_schema;
 
@@ -15,7 +15,7 @@ pub struct PortRef {
     pub port: u32,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GraphNode {
     pub id: NodeId,
     pub type_id: String,
@@ -33,17 +33,15 @@ fn object_default() -> serde_json::Value {
     serde_json::json!({})
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GraphEdge {
     pub from: PortRef,
     pub to: PortRef,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Graph {
     pub version: u32,
-    #[serde(default = "default_rate")]
-    pub rate_hz: f32,
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,
     #[serde(default)]
@@ -52,15 +50,10 @@ pub struct Graph {
     pub variables: Vec<GraphVar>,
 }
 
-fn default_rate() -> f32 {
-    100.0
-}
-
 impl Default for Graph {
     fn default() -> Self {
         Self {
             version: 1,
-            rate_hz: 100.0,
             nodes: vec![],
             edges: vec![],
             next_id: 1,
@@ -149,7 +142,7 @@ impl Graph {
         // Cycle check: temporarily add and toposort.
         let mut tmp = self.clone();
         tmp.edges.push(GraphEdge { from, to });
-        tmp.toposort(registry)?;
+        tmp.toposort()?;
         Ok(())
     }
 
@@ -167,15 +160,11 @@ impl Graph {
         self.edges.retain(|e| e.from != from);
     }
 
-    pub fn disconnect_edge(&mut self, from: PortRef, to: PortRef) {
-        self.edges.retain(|e| !(e.from == from && e.to == to));
-    }
-
     pub fn source_of(&self, to: PortRef) -> Option<PortRef> {
         self.edges.iter().find(|e| e.to == to).map(|e| e.from)
     }
 
-    pub fn toposort(&self, _registry: &NodeRegistry) -> Result<Vec<NodeId>> {
+    pub fn toposort(&self) -> Result<Vec<NodeId>> {
         use petgraph::algo::toposort;
         use petgraph::graph::DiGraph;
 
@@ -203,10 +192,6 @@ impl Graph {
         for n in &mut self.nodes {
             n.missing = registry.get(&n.type_id).is_none();
         }
-    }
-
-    pub fn used_ids(&self) -> HashSet<NodeId> {
-        self.nodes.iter().map(|n| n.id).collect()
     }
 
     pub fn var(&self, name: &str) -> Option<&GraphVar> {
@@ -291,12 +276,11 @@ pub struct NodeBinding {
 pub struct ExecPlan {
     pub order: Vec<NodeId>,
     pub bindings: HashMap<NodeId, NodeBinding>,
-    pub rate_hz: f32,
 }
 
 impl Graph {
     pub fn compile(&self, registry: &NodeRegistry) -> Result<ExecPlan> {
-        let order = self.toposort(registry)?;
+        let order = self.toposort()?;
         let mut bindings = HashMap::new();
         for n in &self.nodes {
             if n.missing || registry.get(&n.type_id).is_none() {
@@ -329,7 +313,6 @@ impl Graph {
                 .filter(|id| bindings.contains_key(id))
                 .collect(),
             bindings,
-            rate_hz: self.rate_hz.max(1.0),
         })
     }
 }
@@ -410,7 +393,6 @@ mod tests {
             type_id: id.into(),
             display_name: id.into(),
             category: cat,
-            flags: 0,
             inputs: ins
                 .iter()
                 .enumerate()
@@ -472,14 +454,13 @@ mod tests {
             from: PortRef { node: p2, port: 0 },
             to: PortRef { node: p1, port: 0 },
         });
-        assert!(g2.toposort(&reg).is_err());
+        assert!(g2.toposort().is_err());
     }
 
     #[test]
     fn roundtrip_json() {
         let g = Graph {
             version: 1,
-            rate_hz: 90.0,
             next_id: 3,
             nodes: vec![GraphNode {
                 id: NodeId(1),
@@ -495,7 +476,6 @@ mod tests {
         };
         let s = graph_to_json(&g).unwrap();
         let g2 = graph_from_json(&s).unwrap();
-        assert_eq!(g2.rate_hz, 90.0);
         assert_eq!(g2.nodes[0].type_id, "src");
     }
 }

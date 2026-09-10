@@ -2,7 +2,6 @@ use crate::error::{CoreError, Result};
 use crate::log::LogBus;
 use crate::registry::{NodeRegistry, NodeType};
 use libloading::Library;
-use std::ffi::c_void;
 use std::path::{Path, PathBuf};
 use vf_abi::{VF_ABI_VERSION, VF_PLUGIN_ENTRY, VfPluginDescriptor, VfPluginEntry};
 
@@ -164,5 +163,3 @@ pub fn default_plugin_dirs() -> Vec<PathBuf> {
     dirs.push(PathBuf::from("target/release"));
     dirs
 }
-
-pub fn _keep_cvoid(_: *mut c_void) {}

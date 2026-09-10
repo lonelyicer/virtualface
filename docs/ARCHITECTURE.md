@@ -41,7 +41,7 @@ Wires require matching `VfValueTag`. One edge per input port. Cycles are rejecte
 
 ## Engine
 
-A dedicated thread ticks at `rate_hz` (default 100). Input nodes call `host.wake()` to cut wait. Node instances are keyed by `NodeId` and reused across recompiles so calibration state survives reconnects.
+A dedicated thread ticks at 100 Hz. Input nodes call `host.wake()` to cut wait. Node instances are keyed by `NodeId` and reused across recompiles so calibration state survives reconnects.
 
 `Session` shuts the engine down (join + `destroy`) **before** `PluginHost` drops `libloading::Library` handles. Unmapping a cdylib while vtable pointers are still in use is undefined (typically SIGSEGV). Plugins are not unloaded at runtime.
 

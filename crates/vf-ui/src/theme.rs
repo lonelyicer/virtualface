@@ -1,4 +1,4 @@
-use gpui_kit::component::{ActiveTheme, Theme, ThemeMode};
+use gpui_kit::component::{Theme, ThemeMode};
 use gpui_kit::*;
 use std::sync::Arc;
 use vf_abi::VfValueTag;
@@ -132,14 +132,4 @@ pub fn lock_dark_theme(cx: &mut App) {
 pub fn lock_dark_theme_for_window(window: &mut Window, cx: &mut App) {
     cx.set_window_appearance(Some(WindowAppearance::Dark));
     Theme::change(ThemeMode::Dark, Some(window), cx);
-}
-
-#[allow(dead_code)]
-pub fn theme_bg(cx: &App) -> Hsla {
-    cx.theme().background
-}
-
-#[allow(dead_code)]
-pub fn theme_fg(cx: &App) -> Hsla {
-    cx.theme().foreground
 }

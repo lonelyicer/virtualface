@@ -60,7 +60,6 @@ fn synthetic_to_osc_if_plugins_built() {
     let port = sock.local_addr().unwrap().port();
 
     let mut g = Graph::default();
-    g.rate_hz = 50.0;
     g.nodes = vec![
         GraphNode {
             id: NodeId(1),

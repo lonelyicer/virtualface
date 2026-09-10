@@ -82,7 +82,7 @@ impl VarType {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GraphVar {
     pub name: String,
     #[serde(rename = "type")]

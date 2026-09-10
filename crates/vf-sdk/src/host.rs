@@ -1,5 +1,5 @@
 use crate::error::SdkError;
-use std::ffi::{CStr, c_void};
+use std::ffi::CStr;
 use vf_abi::{VF_LOG_DEBUG, VF_LOG_ERROR, VF_LOG_INFO, VF_LOG_WARN, VfHostApi};
 
 /// Host callbacks available to a node instance.
@@ -17,10 +17,6 @@ impl Host {
     /// `api` must remain valid for the lifetime of the plugin process.
     pub unsafe fn from_raw(api: *const VfHostApi, node_handle: u64) -> Self {
         Self { api, node_handle }
-    }
-
-    pub fn node_handle(self) -> u64 {
-        self.node_handle
     }
 
     pub fn now_us(self) -> u64 {
@@ -148,9 +144,4 @@ pub fn json_from_ptr(p: *const std::ffi::c_char) -> Result<serde_json::Value, Sd
             Some(s) => serde_json::from_str(s).map_err(|e| SdkError::Param(e.to_string())),
         }
     }
-}
-
-/// Helper to ignore unused user_data in trampolines.
-pub fn _void(p: *mut c_void) -> *mut c_void {
-    p
 }

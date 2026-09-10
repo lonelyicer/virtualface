@@ -7,7 +7,7 @@ use gpui_kit::prelude::*;
 use gpui_kit::*;
 
 const TITLE_BAR_H: f32 = 72.0;
-const TITLE_BTN_W: f32 = 52.0;
+const TITLE_BTN: f32 = 32.0;
 const SIDEBAR_TITLE_PL: f32 = 28.0;
 
 impl Workspace {
@@ -22,6 +22,7 @@ impl Workspace {
             .w_full()
             .h(px(TITLE_BAR_H))
             .items_center()
+            .px_6()
             .bg(cx.theme().background)
             .window_control_area(WindowControlArea::Drag)
             .on_mouse_down(
@@ -55,7 +56,6 @@ impl Workspace {
                     .h_full()
                     .min_w(px(0.))
                     .items_center()
-                    .pl_3()
                     .gap_3()
                     .child(
                         div()
@@ -165,7 +165,7 @@ fn window_controls(window: &Window, cx: &mut Context<Workspace>) -> impl IntoEle
         .id("window-controls")
         .items_center()
         .flex_shrink_0()
-        .h_full()
+        .gap_2()
         .when(supported.minimize, |this| {
             this.child(window_btn(
                 "minimize",
@@ -220,11 +220,13 @@ fn window_btn(
     div()
         .id(id)
         .flex()
-        .w(px(TITLE_BTN_W))
-        .h_full()
+        .w(px(TITLE_BTN))
+        .h(px(TITLE_BTN))
         .flex_shrink_0()
         .justify_center()
         .items_center()
+        .rounded_full()
+        .cursor_pointer()
         .window_control_area(area)
         .hover(|d| d.bg(hover_bg).text_color(hover_fg))
         .on_mouse_down(MouseButton::Left, |_, window, cx| {

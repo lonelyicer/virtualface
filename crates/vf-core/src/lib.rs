@@ -1,5 +1,6 @@
 //! VirtualFace host: plugin loader, graph compiler, execution engine.
 
+pub mod archive;
 pub mod builtins;
 pub mod engine;
 pub mod error;
@@ -11,17 +12,21 @@ pub mod prefs;
 pub mod registry;
 pub mod vars;
 
-pub use engine::{EngineCommand, EngineHandle, spawn_engine};
+pub use archive::{
+    ArchiveIndex, ArchiveMeta, delete_archive_file, load_archive_index, new_archive_id,
+    read_archive_json, save_archive_index, write_archive_json,
+};
+pub use engine::{EngineHandle, spawn_engine};
 pub use error::{CoreError, Result};
 pub use graph::{
     ExecPlan, Graph, GraphEdge, GraphNode, NodeId, PortRef, graph_from_json, graph_to_json,
 };
 pub use instance::{NodeSnap, Snapshot, SnapshotValue};
-pub use log::{LogBus, LogLine, format_ts, level_name, now_us, tracing_from_bus};
+pub use log::{LogBus, LogLine, now_us, tracing_from_bus};
 pub use plugin::{LoadedPlugin, PluginHost, default_plugin_dirs};
 pub use prefs::{
-    absolute_path, config_dir, graph_display_name, last_graph_path, load_locale, remember_last_graph,
-    save_locale, with_graph_extension,
+    absolute_path, graph_display_name, last_graph_path, load_locale, save_locale,
+    with_graph_extension,
 };
 pub use registry::{NodeRegistry, NodeType, PortType};
 pub use vars::{GraphVar, VarType};

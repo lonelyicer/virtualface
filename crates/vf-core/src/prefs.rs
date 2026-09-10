@@ -52,17 +52,6 @@ pub fn last_graph_path() -> Option<PathBuf> {
     }
 }
 
-pub fn remember_last_graph(path: &Path) {
-    let Some(dir) = config_dir() else {
-        return;
-    };
-    if std::fs::create_dir_all(&dir).is_err() {
-        return;
-    }
-    let stored = absolute_path(path);
-    let _ = std::fs::write(dir.join("last_graph"), stored.to_string_lossy().as_bytes());
-}
-
 pub fn absolute_path(path: &Path) -> PathBuf {
     if path.is_absolute() {
         path.to_path_buf()

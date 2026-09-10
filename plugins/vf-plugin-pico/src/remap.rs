@@ -1,6 +1,6 @@
 //! PICO native blendshape order → ARKit 52.
 
-use vf_abi::ARKIT_BLENDSHAPE_COUNT;
+const ARKIT_COUNT: usize = 52;
 
 /// Maps `BlendShape.Index` (PICO) to ARKit 52 index.
 /// Source: VRCFTPicoModule `BlendShapeIndex.cs` vs Apple ARKit order.
@@ -59,8 +59,8 @@ pub const PICO_TO_ARKIT: [Option<usize>; 52] = [
     Some(51), // 51 TongueOut
 ];
 
-pub(crate) fn pico_to_arkit(pico: &[f32]) -> [f32; ARKIT_BLENDSHAPE_COUNT as usize] {
-    let mut out = [0f32; ARKIT_BLENDSHAPE_COUNT as usize];
+pub(crate) fn pico_to_arkit(pico: &[f32]) -> [f32; ARKIT_COUNT] {
+    let mut out = [0f32; ARKIT_COUNT];
     for (pico_i, dst) in PICO_TO_ARKIT.iter().enumerate() {
         if let Some(ai) = *dst {
             if let Some(v) = pico.get(pico_i) {
@@ -71,66 +71,64 @@ pub(crate) fn pico_to_arkit(pico: &[f32]) -> [f32; ARKIT_BLENDSHAPE_COUNT as usi
     out
 }
 
-/// Standard ARKit 52 names (Apple order).
-#[allow(dead_code)]
-pub const ARKIT_NAMES: [&str; 52] = [
-    "eyeBlinkLeft",
-    "eyeLookDownLeft",
-    "eyeLookInLeft",
-    "eyeLookOutLeft",
-    "eyeLookUpLeft",
-    "eyeSquintLeft",
-    "eyeWideLeft",
-    "eyeBlinkRight",
-    "eyeLookDownRight",
-    "eyeLookInRight",
-    "eyeLookOutRight",
-    "eyeLookUpRight",
-    "eyeSquintRight",
-    "eyeWideRight",
-    "jawForward",
-    "jawLeft",
-    "jawRight",
-    "jawOpen",
-    "mouthClose",
-    "mouthFunnel",
-    "mouthPucker",
-    "mouthLeft",
-    "mouthRight",
-    "mouthSmileLeft",
-    "mouthSmileRight",
-    "mouthFrownLeft",
-    "mouthFrownRight",
-    "mouthDimpleLeft",
-    "mouthDimpleRight",
-    "mouthStretchLeft",
-    "mouthStretchRight",
-    "mouthRollLower",
-    "mouthRollUpper",
-    "mouthShrugLower",
-    "mouthShrugUpper",
-    "mouthPressLeft",
-    "mouthPressRight",
-    "mouthLowerDownLeft",
-    "mouthLowerDownRight",
-    "mouthUpperUpLeft",
-    "mouthUpperUpRight",
-    "browDownLeft",
-    "browDownRight",
-    "browInnerUp",
-    "browOuterUpLeft",
-    "browOuterUpRight",
-    "cheekPuff",
-    "cheekSquintLeft",
-    "cheekSquintRight",
-    "noseSneerLeft",
-    "noseSneerRight",
-    "tongueOut",
-];
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const ARKIT_NAMES: [&str; 52] = [
+        "eyeBlinkLeft",
+        "eyeLookDownLeft",
+        "eyeLookInLeft",
+        "eyeLookOutLeft",
+        "eyeLookUpLeft",
+        "eyeSquintLeft",
+        "eyeWideLeft",
+        "eyeBlinkRight",
+        "eyeLookDownRight",
+        "eyeLookInRight",
+        "eyeLookOutRight",
+        "eyeLookUpRight",
+        "eyeSquintRight",
+        "eyeWideRight",
+        "jawForward",
+        "jawLeft",
+        "jawRight",
+        "jawOpen",
+        "mouthClose",
+        "mouthFunnel",
+        "mouthPucker",
+        "mouthLeft",
+        "mouthRight",
+        "mouthSmileLeft",
+        "mouthSmileRight",
+        "mouthFrownLeft",
+        "mouthFrownRight",
+        "mouthDimpleLeft",
+        "mouthDimpleRight",
+        "mouthStretchLeft",
+        "mouthStretchRight",
+        "mouthRollLower",
+        "mouthRollUpper",
+        "mouthShrugLower",
+        "mouthShrugUpper",
+        "mouthPressLeft",
+        "mouthPressRight",
+        "mouthLowerDownLeft",
+        "mouthLowerDownRight",
+        "mouthUpperUpLeft",
+        "mouthUpperUpRight",
+        "browDownLeft",
+        "browDownRight",
+        "browInnerUp",
+        "browOuterUpLeft",
+        "browOuterUpRight",
+        "cheekPuff",
+        "cheekSquintLeft",
+        "cheekSquintRight",
+        "noseSneerLeft",
+        "noseSneerRight",
+        "tongueOut",
+    ];
 
     #[test]
     fn jaw_open_lands_on_arkit_17() {

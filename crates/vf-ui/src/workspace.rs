@@ -1,4 +1,4 @@
-use crate::i18n::{Locale, T, locale, set_locale, t, tf};
+use crate::i18n::{Locale, T, locale, set_locale, t};
 use crate::page::AppPage;
 use crate::theme::{Camera, Drag, Vec2};
 use gpui_kit::base::VirtualListScrollHandle;
@@ -8,11 +8,10 @@ use gpui_kit::component::{ActiveTheme, IndexPath, Root, TitleBar, h_flex, v_flex
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use vf_core::{
-    NodeId, Session, absolute_path, graph_display_name, remember_last_graph, with_graph_extension,
-};
+use vf_core::{ArchiveIndex, Graph, NodeId, Session};
+
+use crate::archives::bootstrap_archives;
 
 pub(crate) struct AddMenu {
     pub pos: Point<Pixels>,
@@ -48,7 +47,11 @@ pub struct Workspace {
     pub(crate) vars_open: bool,
     pub(crate) var_dialog: Option<VarDialog>,
     pub(crate) var_form: Option<Entity<crate::pages::graph::VarCreateForm>>,
-    pub(crate) graph_path: String,
+    pub(crate) archives: ArchiveIndex,
+    pub(crate) archive_menu_open: bool,
+    pub(crate) archive_picker_bounds: Bounds<Pixels>,
+    pub(crate) undo_stack: Vec<Graph>,
+    pub(crate) gesture_before: Option<Graph>,
     pub(crate) status: String,
     pub(crate) focus: FocusHandle,
     pub(crate) title_should_move: bool,
@@ -82,7 +85,6 @@ impl Workspace {
             }
         })
         .detach();
-        let graph_path = session.graph_path.lock().clone();
         let locales: Vec<Locale> = Locale::all().collect();
         let current = locale(cx);
         let selected = locales.iter().position(|l| *l == current).unwrap_or(0);
@@ -103,6 +105,7 @@ impl Workspace {
                 }
             },
         );
+        let archives = bootstrap_archives(&session, t(cx, T::Unnamed).as_ref());
         Self {
             session,
             page: AppPage::Home,
@@ -122,7 +125,11 @@ impl Workspace {
             vars_open: true,
             var_dialog: None,
             var_form: None,
-            graph_path,
+            archives,
+            archive_menu_open: false,
+            archive_picker_bounds: Bounds::default(),
+            undo_stack: Vec::new(),
+            gesture_before: None,
             status: t(cx, T::StatusReady).to_string(),
             focus: cx.focus_handle(),
             title_should_move: false,
@@ -166,164 +173,12 @@ impl Workspace {
         cx.notify();
     }
 
-    pub(crate) fn graph_name(&self, cx: &App) -> String {
-        graph_display_name(&self.graph_path, t(cx, T::Unnamed).as_ref())
-    }
-
-    fn set_current_graph_path(&mut self, path: PathBuf) {
-        let path = absolute_path(&path);
-        let shown = path.to_string_lossy().into_owned();
-        self.graph_path = shown.clone();
-        *self.session.graph_path.lock() = shown;
-        remember_last_graph(&path);
-    }
-
-    fn reset_editor_for_graph(&mut self) {
+    pub(crate) fn reset_editor_for_graph(&mut self) {
         self.selected.clear();
         self.primary = None;
         self.close_add_menu();
         self.pin_inputs.clear();
         self.pin_subs.clear();
-    }
-
-    fn write_graph_to(&mut self, path: &Path, cx: &mut Context<Self>) {
-        let path = with_graph_extension(path.to_path_buf());
-        match self.session.save_graph_str() {
-            Ok(s) => match std::fs::write(&path, s) {
-                Ok(()) => {
-                    self.set_current_graph_path(path);
-                    self.status = tf(cx, T::StatusSaved, &[("path", &self.graph_path)]);
-                    self.note(2, self.status.clone());
-                }
-                Err(e) => {
-                    let err = e.to_string();
-                    self.status = tf(cx, T::StatusSaveFailed, &[("err", &err)]);
-                    self.note(0, self.status.clone());
-                }
-            },
-            Err(e) => {
-                let err = e.to_string();
-                self.status = tf(cx, T::StatusSaveFailed, &[("err", &err)]);
-                self.note(0, self.status.clone());
-            }
-        }
-        cx.notify();
-    }
-
-    pub(crate) fn save_graph(&mut self, cx: &mut Context<Self>) {
-        if self.graph_path.is_empty() {
-            self.export_graph(cx);
-            return;
-        }
-        let path = PathBuf::from(&self.graph_path);
-        self.write_graph_to(&path, cx);
-    }
-
-    pub(crate) fn load_graph_from_path(&mut self, path: &Path, cx: &mut Context<Self>) {
-        match std::fs::read_to_string(path) {
-            Ok(s) => match self.session.load_graph_str(&s) {
-                Ok(()) => {
-                    self.set_current_graph_path(path.to_path_buf());
-                    self.reset_editor_for_graph();
-                    self.status = tf(cx, T::StatusLoaded, &[("path", &self.graph_path)]);
-                    self.note(2, self.status.clone());
-                }
-                Err(e) => {
-                    let err = e.to_string();
-                    self.status = tf(cx, T::StatusLoadFailed, &[("err", &err)]);
-                    self.note(0, self.status.clone());
-                }
-            },
-            Err(e) => {
-                let err = e.to_string();
-                self.status = tf(cx, T::StatusOpenFailed, &[("err", &err)]);
-                self.note(0, self.status.clone());
-            }
-        }
-        cx.notify();
-    }
-
-    pub(crate) fn pick_and_load_graph(&mut self, cx: &mut Context<Self>) {
-        let rx = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: Some(t(cx, T::GraphLoadPrompt)),
-        });
-        cx.spawn(async move |this, cx| {
-            let outcome = match rx.await {
-                Ok(v) => v,
-                Err(_) => return,
-            };
-            match outcome {
-                Ok(Some(paths)) => {
-                    if let Some(path) = paths.into_iter().next() {
-                        this.update(cx, |this, cx| this.load_graph_from_path(&path, cx))
-                            .ok();
-                    }
-                }
-                Ok(None) => {}
-                Err(e) => {
-                    this.update(cx, |this, cx| {
-                        let err = e.to_string();
-                        this.status = tf(cx, T::StatusOpenFailed, &[("err", &err)]);
-                        this.note(0, this.status.clone());
-                        cx.notify();
-                    })
-                    .ok();
-                }
-            }
-        })
-        .detach();
-    }
-
-    pub(crate) fn export_graph(&mut self, cx: &mut Context<Self>) {
-        let dir = Path::new(&self.graph_path)
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .map(Path::to_path_buf)
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| PathBuf::from("."));
-        let suggested = Path::new(&self.graph_path)
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("graph.vfgraph.json");
-        let rx = cx.prompt_for_new_path(&dir, Some(suggested));
-        cx.spawn(async move |this, cx| {
-            let outcome = match rx.await {
-                Ok(v) => v,
-                Err(_) => return,
-            };
-            match outcome {
-                Ok(Some(path)) => {
-                    this.update(cx, |this, cx| this.write_graph_to(&path, cx))
-                        .ok();
-                }
-                Ok(None) => {}
-                Err(e) => {
-                    this.update(cx, |this, cx| {
-                        let err = e.to_string();
-                        this.status = tf(cx, T::StatusExportFailed, &[("err", &err)]);
-                        this.note(0, this.status.clone());
-                        cx.notify();
-                    })
-                    .ok();
-                }
-            }
-        })
-        .detach();
-    }
-
-    pub(crate) fn bump_rate(&mut self, delta: f32, cx: &mut Context<Self>) {
-        let mut g = self.session.graph.lock();
-        g.rate_hz = (g.rate_hz + delta).clamp(1.0, 240.0);
-        let rate = g.rate_hz;
-        drop(g);
-        self.session.recompile();
-        let rate = format!("{rate:.0}");
-        self.status = tf(cx, T::StatusTickRate, &[("rate", &rate)]);
-        self.note(2, self.status.clone());
-        cx.notify();
     }
 
     fn page_body(

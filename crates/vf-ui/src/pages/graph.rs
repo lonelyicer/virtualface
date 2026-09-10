@@ -7,11 +7,14 @@ use crate::theme::{
     Camera, Drag, EDITOR_H, HEADER_H, NODE_W, Vec2, category_color, latest_snapshot,
 };
 use crate::workspace::{AddMenu, VarDialog, Workspace};
+use gpui_kit::base::ElementExt;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::searchable_list::SearchableListItem;
 use gpui_kit::component::select::{SearchableVec, Select, SelectEvent, SelectState};
-use gpui_kit::component::{IndexPath, Sizable, h_flex, v_flex};
+use gpui_kit::component::{
+    Disableable, Icon, IconName, IndexPath, Sizable, h_flex, v_flex,
+};
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 use std::collections::HashSet;
@@ -199,15 +202,20 @@ impl Workspace {
         world: Vec2,
         cx: &mut Context<Self>,
     ) -> NodeId {
-        let id = {
-            let mut g = self.session.graph.lock();
-            g.add_node(type_id, world.x, world.y, &self.session.registry)
-        };
+        let before = self.snapshot_graph();
+        let id = self.add_node_at_raw(type_id, world);
         self.select_only(id);
         self.close_add_menu();
         self.session.recompile();
-        cx.notify();
+        self.commit_graph_change(before, cx);
         id
+    }
+
+    fn add_node_at_raw(&mut self, type_id: &str, world: Vec2) -> NodeId {
+        self.session
+            .graph
+            .lock()
+            .add_node(type_id, world.x, world.y, &self.session.registry)
     }
 
     pub(crate) fn close_add_menu(&mut self) {
@@ -217,8 +225,20 @@ impl Workspace {
     }
 
     fn add_get_at(&mut self, name: &str, ty: VarType, world: Vec2, cx: &mut Context<Self>) {
-        let id = self.add_node_at(ty.get_type_id(), world, cx);
-        self.set_param(id, "name", serde_json::json!(name), cx);
+        let before = self.snapshot_graph();
+        let id = self.add_node_at_raw(ty.get_type_id(), world);
+        self.select_only(id);
+        self.close_add_menu();
+        if let Some(n) = self.session.graph.lock().node_mut(id) {
+            if let Some(obj) = n.params.as_object_mut() {
+                obj.insert("name".into(), serde_json::json!(name));
+            }
+        }
+        self.session
+            .engine
+            .set_param(id, "name".into(), serde_json::json!(name));
+        self.session.recompile();
+        self.commit_graph_change(before, cx);
     }
 
     fn select_only(&mut self, id: NodeId) {
@@ -240,17 +260,20 @@ impl Workspace {
         let ids: Vec<NodeId> = self.selected.drain().collect();
         self.primary = None;
         if !ids.is_empty() {
+            let before = self.snapshot_graph();
             let mut g = self.session.graph.lock();
             for id in ids {
                 g.remove_node(id);
             }
             drop(g);
             self.session.recompile();
+            self.commit_graph_change(before, cx);
         }
         cx.notify();
     }
 
-    fn break_pin(&mut self, port: PortRef, is_in: bool) {
+    fn break_pin(&mut self, port: PortRef, is_in: bool, cx: &mut Context<Self>) {
+        let before = self.snapshot_graph();
         let mut g = self.session.graph.lock();
         if is_in {
             g.disconnect(port);
@@ -259,6 +282,7 @@ impl Workspace {
         }
         drop(g);
         self.session.recompile();
+        self.commit_graph_change(before, cx);
     }
 
     fn apply_marquee(&mut self, start: Vec2, current: Vec2, additive: bool) {
@@ -403,10 +427,11 @@ impl Workspace {
                     // unwirable param row: let pin widgets handle the click
                 } else {
                     if ev.modifiers.alt {
-                        self.break_pin(pin, is_in);
+                        self.break_pin(pin, is_in, cx);
                         cx.notify();
                         return;
                     }
+                    self.begin_graph_gesture();
                     if is_in {
                         let source = self.session.graph.lock().source_of(pin);
                         if let Some(from) = source {
@@ -444,6 +469,7 @@ impl Workspace {
                     } else {
                         self.selected.insert(n.id);
                         self.primary = Some(n.id);
+                        self.begin_graph_gesture();
                         self.drag = Drag::Nodes { last: world };
                     }
                 } else {
@@ -452,6 +478,7 @@ impl Workspace {
                     } else {
                         self.primary = Some(n.id);
                     }
+                    self.begin_graph_gesture();
                     self.drag = Drag::Nodes { last: world };
                 }
                 cx.notify();
@@ -546,6 +573,7 @@ impl Workspace {
             Drag::Wire { from, output, .. } if ev.button == MouseButton::Left => {
                 self.finish_wire(from, output, ev.position, cx);
                 self.drag = Drag::None;
+                self.end_graph_gesture(cx);
             }
             Drag::Marquee {
                 start,
@@ -557,6 +585,7 @@ impl Workspace {
             }
             Drag::Nodes { .. } if ev.button == MouseButton::Left => {
                 self.drag = Drag::None;
+                self.end_graph_gesture(cx);
             }
             Drag::Rmb { origin, world, .. } if ev.button == MouseButton::Right => {
                 self.on_rmb_click(origin, world, window, cx);
@@ -630,13 +659,153 @@ impl Workspace {
         value: serde_json::Value,
         cx: &mut Context<Self>,
     ) {
+        let before = self.snapshot_graph();
         if let Some(n) = self.session.graph.lock().node_mut(id) {
             if let Some(obj) = n.params.as_object_mut() {
                 obj.insert(key.to_string(), value.clone());
             }
         }
         self.session.engine.set_param(id, key.to_string(), value);
+        self.commit_graph_change(before, cx);
         cx.notify();
+    }
+
+    fn archive_picker(
+        &self,
+        cx: &mut Context<Self>,
+        surface: Hsla,
+        border: Hsla,
+        muted: Hsla,
+    ) -> impl IntoElement {
+        let name = self.graph_name(cx);
+        let open = self.archive_menu_open;
+        let current = self.archives.current.clone();
+        let items: Vec<(String, String)> = self
+            .archives
+            .items
+            .iter()
+            .map(|item| (item.id.clone(), item.name.clone()))
+            .collect();
+        let menu_origin = point(
+            self.archive_picker_bounds.origin.x,
+            self.archive_picker_bounds.origin.y + self.archive_picker_bounds.size.height + px(4.),
+        );
+        let menu_w = self.archive_picker_bounds.size.width.max(px(200.));
+        let view = cx.entity();
+
+        div()
+            .id("graph-archive-picker")
+            .relative()
+            .flex_shrink_0()
+            .w(px(240.))
+            .on_prepaint(move |bounds, _, cx| {
+                let _ = view.update(cx, |this, _| {
+                    this.archive_picker_bounds = bounds;
+                });
+            })
+            .child(
+                h_flex()
+                    .id("graph-archive-trigger")
+                    .w_full()
+                    .h_6()
+                    .px_2()
+                    .gap_1()
+                    .items_center()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(border)
+                    .bg(surface)
+                    .cursor_pointer()
+                    .occlude()
+                    .hover(|d| d.bg(rgb(0x27272a)))
+                    .on_click(cx.listener(|this, ev: &ClickEvent, window, cx| {
+                        cx.stop_propagation();
+                        if ev.click_count() >= 2 {
+                            this.prompt_rename_graph_archive(window, cx);
+                            return;
+                        }
+                        this.archive_menu_open = !this.archive_menu_open;
+                        cx.notify();
+                    }))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .truncate()
+                            .text_sm()
+                            .child(name),
+                    )
+                    .child(
+                        Icon::new(IconName::ChevronDown)
+                            .xsmall()
+                            .text_color(muted),
+                    ),
+            )
+            .when(open, |this| {
+                this.child(
+                    deferred(
+                        anchored()
+                            .position(menu_origin)
+                            .anchor(Anchor::TopLeft)
+                            .child(
+                                v_flex()
+                                    .id("graph-archive-menu")
+                                    .w(menu_w)
+                                    .max_h(px(280.))
+                                    .occlude()
+                                    .overflow_y_scroll()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(border)
+                                    .bg(surface)
+                                    .shadow_md()
+                                    .p_1()
+                                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                                        cx.stop_propagation()
+                                    })
+                                    .on_mouse_down_out(cx.listener(
+                                        |this, ev: &MouseDownEvent, _, cx| {
+                                            if this.archive_picker_bounds.contains(&ev.position) {
+                                                return;
+                                            }
+                                            this.archive_menu_open = false;
+                                            cx.notify();
+                                        },
+                                    ))
+                                    .children(items.into_iter().map(|(id, item_name)| {
+                                        let selected = id == current;
+                                        h_flex()
+                                            .id(SharedString::from(format!(
+                                                "graph-archive-item-{id}"
+                                            )))
+                                            .w_full()
+                                            .px_2()
+                                            .py_1()
+                                            .rounded_md()
+                                            .cursor_pointer()
+                                            .when(selected, |d| d.bg(rgb(0x3f3f46)))
+                                            .hover(|d| d.bg(rgb(0x27272a)))
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.switch_archive(id.clone(), cx);
+                                            }))
+                                            .child(
+                                                div()
+                                                    .flex_1()
+                                                    .min_w(px(0.))
+                                                    .overflow_hidden()
+                                                    .whitespace_nowrap()
+                                                    .truncate()
+                                                    .text_sm()
+                                                    .child(item_name),
+                                            )
+                                    })),
+                            ),
+                    )
+                    .with_priority(100),
+                )
+            })
     }
 
     pub(crate) fn graph_page(
@@ -663,36 +832,50 @@ impl Workspace {
                     .w_full()
                     .min_w(px(0.))
                     .items_center()
+                    .justify_between()
                     .gap_3()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.))
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(self.graph_name(cx)),
-                    )
+                    .child(self.archive_picker(cx, surface, border, muted))
                     .child(
                         h_flex()
                             .gap_2()
                             .flex_shrink_0()
+                            .justify_end()
                             .child(
-                                Button::new("graph-save")
-                                    .label(t(cx, T::GraphSave))
-                                    .on_click(cx.listener(|this, _, _, cx| this.save_graph(cx))),
-                            )
-                            .child(
-                                Button::new("graph-load")
-                                    .label(t(cx, T::GraphLoad))
-                                    .on_click(
-                                        cx.listener(|this, _, _, cx| this.pick_and_load_graph(cx)),
-                                    ),
+                                Button::new("graph-import")
+                                    .small()
+                                    .label(t(cx, T::GraphImport))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.pick_and_import_graph(cx)
+                                    })),
                             )
                             .child(
                                 Button::new("graph-export")
+                                    .small()
                                     .label(t(cx, T::GraphExport))
                                     .on_click(cx.listener(|this, _, _, cx| this.export_graph(cx))),
+                            )
+                            .child(
+                                Button::new("graph-new")
+                                    .small()
+                                    .label(t(cx, T::GraphNew))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.prompt_new_graph_archive(window, cx)
+                                    })),
+                            )
+                            .child(
+                                Button::new("graph-delete")
+                                    .small()
+                                    .label(t(cx, T::GraphDelete))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.prompt_delete_graph_archive(window, cx)
+                                    })),
+                            )
+                            .child(
+                                Button::new("graph-undo")
+                                    .small()
+                                    .label(t(cx, T::GraphUndo))
+                                    .disabled(self.undo_stack.is_empty())
+                                    .on_click(cx.listener(|this, _, _, cx| this.undo_graph(cx))),
                             ),
                     ),
             )
@@ -905,10 +1088,18 @@ impl Workspace {
                     }
                     this.close_add_menu();
                     this.drag = Drag::None;
+                    this.end_graph_gesture(cx);
                     cx.notify();
                     return;
                 }
                 if this.var_dialog.is_some() || this.add_menu.is_some() {
+                    return;
+                }
+                if ev.keystroke.key == "z"
+                    && ev.keystroke.modifiers.secondary()
+                    && !ev.keystroke.modifiers.shift
+                {
+                    this.undo_graph(cx);
                     return;
                 }
                 if ev.keystroke.key == "delete" || ev.keystroke.key == "backspace" {
@@ -1395,10 +1586,12 @@ impl Workspace {
                 self.create_variable(&name, ty, value, cx);
             }
             VarDialog::Edit { original } => {
+                let before = self.snapshot_graph();
                 let mut g = self.session.graph.lock();
                 let new_name = g.update_variable(&original, name, ty, value);
                 drop(g);
                 self.session.recompile();
+                self.commit_graph_change(before, cx);
                 self.status = tf(cx, T::StatusVariable, &[("name", &new_name)]);
                 cx.notify();
             }
@@ -1413,6 +1606,7 @@ impl Workspace {
         value: serde_json::Value,
         cx: &mut Context<Self>,
     ) -> String {
+        let before = self.snapshot_graph();
         let mut g = self.session.graph.lock();
         let name = g.add_variable(name.to_string(), ty);
         if let Some(v) = g.var_mut(&name) {
@@ -1420,6 +1614,7 @@ impl Workspace {
         }
         drop(g);
         self.session.recompile();
+        self.commit_graph_change(before, cx);
         self.status = tf(cx, T::StatusVariable, &[("name", &name)]);
         cx.notify();
         name
@@ -1776,8 +1971,10 @@ fn var_row(v: GraphVar, muted: Hsla, cx: &mut Context<Workspace>) -> impl IntoEl
                 .text_color(rgb(0xef4444))
                 .cursor_pointer()
                 .on_click(cx.listener(move |this, _, _, cx| {
+                    let before = this.snapshot_graph();
                     this.session.graph.lock().remove_variable(&name_del);
                     this.session.recompile();
+                    this.commit_graph_change(before, cx);
                     cx.notify();
                 }))
                 .child("×"),
