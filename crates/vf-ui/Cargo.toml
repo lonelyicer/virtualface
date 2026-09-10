@@ -19,3 +19,6 @@ serde_json.workspace = true
 tracing.workspace = true
 image = { version = "0.25", default-features = false }
 smallvec = "1"
+
+[build-dependencies]
+serde_json.workspace = true

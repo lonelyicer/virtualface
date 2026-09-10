@@ -25,12 +25,19 @@
     "plugins": "插件",
     "plugins_loaded": "已加载 {plugins} 个插件，{types} 种节点",
     "node_status": "节点状态",
-    "graph_empty": "图是空的，到节点图添加节点"
+    "graph_empty": "图是空的，到节点图添加节点",
+    "active_plugins": "当前插件",
+    "data_in": "输入",
+    "data_out": "输出",
+    "no_active": "当前图中没有激活的插件"
   },
   "settings": {
     "engine_rate": "引擎频率",
     "plugins": "已加载插件",
-    "language": "语言"
+    "language": "语言",
+    "licenses": "库与协议",
+    "licenses_hint": "本应用使用的第三方库及其许可证。",
+    "licenses_open": "查看"
   },
   "graph": {
     "save": "保存",
@@ -82,5 +89,17 @@
     "int": "Int",
     "bool": "Bool",
     "string": "String"
+  },
+  "licenses": {
+    "title": "许可",
+    "back": "返回",
+    "intro": "VirtualFace 使用下列第三方库，各库仍适用其原有许可证。点击列表项可查看许可证原文。",
+    "this_app": "本应用",
+    "libraries": "第三方库",
+    "name": "库",
+    "version": "版本",
+    "license": "协议",
+    "unknown": "未知",
+    "no_text": "未找到该库的许可证原文。"
   }
 }

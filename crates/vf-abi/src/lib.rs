@@ -44,7 +44,7 @@ mod tests {
         assert_eq!(size_of::<VfHostApi>(), 32);
         assert_eq!(size_of::<VfValueTag>(), 4);
         assert_eq!(size_of::<VfValue>(), 32);
-        assert_eq!(size_of::<VfFloatBuf>(), 24);
+        assert_eq!(size_of::<VfBytes>(), 24);
         assert_eq!(size_of::<VfEyeSample>(), 16);
         assert_eq!(size_of::<VfEyeData>(), 32);
         assert_eq!(size_of::<VfHeadData>(), 24);
@@ -73,21 +73,21 @@ mod tests {
             None
         ));
         assert!(ports_compatible(
-            VfValueTag::Blendshapes,
-            Some("arkit52"),
-            VfValueTag::Blendshapes,
-            Some("arkit52")
+            VfValueTag::Bytes,
+            Some("text"),
+            VfValueTag::Bytes,
+            Some("text")
         ));
         assert!(!ports_compatible(
-            VfValueTag::Blendshapes,
-            Some("arkit52"),
-            VfValueTag::Blendshapes,
-            Some("pico72")
+            VfValueTag::Bytes,
+            Some("text"),
+            VfValueTag::Bytes,
+            Some("json")
         ));
         assert!(ports_compatible(
-            VfValueTag::Blendshapes,
-            Some("arkit52"),
-            VfValueTag::Blendshapes,
+            VfValueTag::Bytes,
+            Some("text"),
+            VfValueTag::Bytes,
             Some("*")
         ));
     }

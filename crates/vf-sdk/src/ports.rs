@@ -34,18 +34,6 @@ impl<'a> PortIo<'a> {
         self.inputs.get(i).and_then(|v| unsafe { v.as_unified() })
     }
 
-    pub fn input_blendshapes(&self, i: usize) -> Result<&[f32]> {
-        let v = self
-            .inputs
-            .get(i)
-            .ok_or_else(|| SdkError::other("missing blendshape input"))?;
-        if v.tag != VfValueTag::Blendshapes {
-            return Err(SdkError::other("input is not blendshapes"));
-        }
-        let buf = unsafe { &v.payload.blendshapes };
-        Ok(unsafe { buf.as_slice() })
-    }
-
     pub fn output_float(&mut self, i: usize, value: f32) -> Result<()> {
         let slot = self
             .outputs
@@ -75,20 +63,5 @@ impl<'a> PortIo<'a> {
             slot.as_unified_mut()
                 .ok_or_else(|| SdkError::other("output is not a UnifiedFrame"))
         }
-    }
-
-    pub fn output_blendshapes_mut(&mut self, i: usize) -> Result<&mut [f32]> {
-        let slot = self
-            .outputs
-            .get_mut(i)
-            .ok_or_else(|| SdkError::other("missing blendshape output"))?;
-        if slot.tag != VfValueTag::Blendshapes {
-            return Err(SdkError::other("output is not blendshapes"));
-        }
-        let p = unsafe { slot.payload.blendshapes };
-        if p.ptr.is_null() {
-            return Ok(&mut []);
-        }
-        Ok(unsafe { core::slice::from_raw_parts_mut(p.ptr, p.len as usize) })
     }
 }

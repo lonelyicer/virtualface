@@ -1,6 +1,6 @@
 //! Tagged values passed between nodes on the hot path.
 //!
-//! All buffers (`UnifiedFrame`, blendshape arrays, bytes) are allocated and owned
+//! All buffers (`UnifiedFrame`, bytes) are allocated and owned
 //! by the host. `process` may read inputs and write outputs but must not retain
 //! pointers across calls.
 
@@ -21,7 +21,6 @@ pub enum VfValueTag {
     Vec2 = 4,
     Vec3 = 5,
     UnifiedFrame = 6,
-    Blendshapes = 7,
     Bytes = 8,
 }
 
@@ -35,7 +34,6 @@ impl VfValueTag {
             Self::Vec2 => "vec2",
             Self::Vec3 => "vec3",
             Self::UnifiedFrame => "unified",
-            Self::Blendshapes => "blendshapes",
             Self::Bytes => "bytes",
         }
     }
@@ -118,46 +116,6 @@ impl VfUnifiedFrame {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct VfFloatBuf {
-    pub schema: *const core::ffi::c_char,
-    pub ptr: *mut f32,
-    pub len: u32,
-    pub cap: u32,
-}
-
-impl VfFloatBuf {
-    pub fn empty() -> Self {
-        Self {
-            schema: ptr::null(),
-            ptr: ptr::null_mut(),
-            len: 0,
-            cap: 0,
-        }
-    }
-
-    /// # Safety
-    /// `ptr` must be valid for `len` floats for the duration of the `process` call.
-    pub unsafe fn as_slice(&self) -> &[f32] {
-        if self.ptr.is_null() {
-            &[]
-        } else {
-            unsafe { core::slice::from_raw_parts(self.ptr, self.len as usize) }
-        }
-    }
-
-    /// # Safety
-    /// `ptr` must be valid for `len` floats (mutable) for the duration of the `process` call.
-    pub unsafe fn as_mut_slice(&mut self) -> &mut [f32] {
-        if self.ptr.is_null() {
-            &mut []
-        } else {
-            unsafe { core::slice::from_raw_parts_mut(self.ptr, self.len as usize) }
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
 pub struct VfBytes {
     pub tag: *const core::ffi::c_char,
     pub ptr: *mut u8,
@@ -186,7 +144,6 @@ pub union VfPayload {
     pub vec2: [f32; 2],
     pub vec3: [f32; 3],
     pub unified: *mut VfUnifiedFrame,
-    pub blendshapes: VfFloatBuf,
     pub bytes: VfBytes,
 }
 
@@ -208,8 +165,6 @@ unsafe impl Send for VfPayload {}
 unsafe impl Sync for VfPayload {}
 unsafe impl Send for VfValue {}
 unsafe impl Sync for VfValue {}
-unsafe impl Send for VfFloatBuf {}
-unsafe impl Sync for VfFloatBuf {}
 unsafe impl Send for VfBytes {}
 unsafe impl Sync for VfBytes {}
 
@@ -358,7 +313,7 @@ pub fn ports_compatible(
         return false;
     }
     match src_tag {
-        VfValueTag::Blendshapes | VfValueTag::Bytes => {
+        VfValueTag::Bytes => {
             let s = src_schema.unwrap_or("");
             let d = dst_schema.unwrap_or("");
             s.is_empty() || d.is_empty() || s == "*" || d == "*" || s == d

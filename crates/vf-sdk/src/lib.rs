@@ -13,8 +13,7 @@ pub use host::{Host, NodeStatus, NodeStatusKind, ProcessCtx};
 pub use node::Node;
 pub use ports::PortIo;
 pub use vf_abi::{
-    ARKIT_BLENDSHAPE_COUNT, PICO_BLENDSHAPE_COUNT, SCHEMA_ARKIT52, SCHEMA_PICO72, SCHEMA_VISEMES20,
-    UnifiedExpression, UnifiedSimpleExpression, VF_NODE_IS_SOURCE, VF_UNIFIED_SHAPE_COUNT,
+    ARKIT_BLENDSHAPE_COUNT, PICO_BLENDSHAPE_COUNT, UnifiedExpression, UnifiedSimpleExpression, VF_NODE_IS_SOURCE, VF_UNIFIED_SHAPE_COUNT,
     VF_VALID_EXPR, VF_VALID_EYE, VF_VALID_HEAD, VISEME_COUNT, VfUnifiedFrame, VfValueTag,
 };
 

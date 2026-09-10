@@ -68,11 +68,23 @@ impl EngineHandle {
     }
 
     pub fn start(&self) {
+        self.set_snapshot_running(true);
         self.send(EngineCommand::Start);
     }
 
     pub fn stop(&self) {
+        self.set_snapshot_running(false);
         self.send(EngineCommand::Stop);
+    }
+
+    fn set_snapshot_running(&self, running: bool) {
+        let cur = self.snapshot.load_full();
+        if cur.running == running {
+            return;
+        }
+        let mut snap = (*cur).clone();
+        snap.running = running;
+        self.snapshot.store(Arc::new(snap));
     }
 
     pub fn shutdown(&self) {
@@ -162,6 +174,7 @@ fn engine_loop(
     wake: Arc<(Mutex<bool>, Condvar)>,
 ) {
     loop {
+        let was_running = inner.running;
         while let Ok(cmd) = cmd_rx.try_recv() {
             if !handle_cmd(inner, cmd) {
                 stop_all(inner);
@@ -171,6 +184,8 @@ fn engine_loop(
         let mut force = false;
         if inner.running {
             run_tick(inner);
+            publish(inner, &snapshot);
+        } else if was_running {
             publish(inner, &snapshot);
         }
         let period = Duration::from_secs_f32(1.0 / inner.plan.rate_hz.max(1.0));

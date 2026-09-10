@@ -5,7 +5,6 @@ mod synthetic;
 mod ue;
 
 pub use packet::{encode_new_packet, parse_pico_packet};
-pub use remap::pico_visemes;
 pub use source::PicoUdpSource;
 pub use synthetic::SyntheticSource;
 

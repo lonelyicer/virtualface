@@ -25,12 +25,19 @@
     "plugins": "Plugins",
     "plugins_loaded": "{plugins} plugins, {types} node types",
     "node_status": "Node status",
-    "graph_empty": "Graph is empty — add nodes on the Graph page"
+    "graph_empty": "Graph is empty — add nodes on the Graph page",
+    "active_plugins": "Active plugins",
+    "data_in": "Input",
+    "data_out": "Output",
+    "no_active": "No plugins in the current graph"
   },
   "settings": {
     "engine_rate": "Engine rate",
     "plugins": "Loaded plugins",
-    "language": "Language"
+    "language": "Language",
+    "licenses": "Libraries & licenses",
+    "licenses_hint": "Third-party crates used by this app and their licenses.",
+    "licenses_open": "View"
   },
   "graph": {
     "save": "Save",
@@ -82,5 +89,17 @@
     "int": "Int",
     "bool": "Bool",
     "string": "String"
+  },
+  "licenses": {
+    "title": "Licenses",
+    "back": "Back",
+    "intro": "VirtualFace includes the following third-party libraries. Each remains under its own license. Click a row to view the original license text.",
+    "this_app": "This application",
+    "libraries": "Third-party libraries",
+    "name": "Library",
+    "version": "Version",
+    "license": "License",
+    "unknown": "Unknown",
+    "no_text": "No license file was found for this crate."
   }
 }

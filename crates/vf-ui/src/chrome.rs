@@ -121,7 +121,7 @@ impl Workspace {
                         "nav-settings",
                         AppPage::Settings.title(cx),
                         IconName::Settings,
-                        page == AppPage::Settings,
+                        page == AppPage::Settings || page == AppPage::Licenses,
                         cx,
                         AppPage::Settings,
                     ))

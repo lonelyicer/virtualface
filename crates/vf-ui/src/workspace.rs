@@ -1,6 +1,7 @@
 use crate::i18n::{Locale, T, locale, set_locale, t, tf};
 use crate::page::AppPage;
 use crate::theme::{Camera, Drag, Vec2};
+use gpui_kit::base::VirtualListScrollHandle;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::select::{SearchableVec, SelectEvent, SelectState};
 use gpui_kit::component::{ActiveTheme, IndexPath, Root, TitleBar, h_flex, v_flex};
@@ -23,6 +24,12 @@ pub(crate) struct AddMenu {
 pub(crate) enum VarDialog {
     Create { preset: Option<String> },
     Edit { original: String },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LicenseId {
+    App,
+    Third(usize),
 }
 
 pub struct Workspace {
@@ -48,6 +55,8 @@ pub struct Workspace {
     pub(crate) log_scroll: ScrollHandle,
     pub(crate) log_len: usize,
     pub(crate) log_tail_ts: u64,
+    pub(crate) license_scroll: VirtualListScrollHandle,
+    pub(crate) license_expanded: Option<LicenseId>,
     pub(crate) language_select: Entity<SelectState<SearchableVec<Locale>>>,
     _language_sub: Option<Subscription>,
     _appearance: Option<Subscription>,
@@ -60,7 +69,14 @@ impl Workspace {
                 cx.background_executor()
                     .timer(std::time::Duration::from_millis(33))
                     .await;
-                if this.update(cx, |_, cx| cx.notify()).is_err() {
+                if this
+                    .update(cx, |this, cx| {
+                        if matches!(this.page, AppPage::Home | AppPage::Graph | AppPage::Log) {
+                            cx.notify();
+                        }
+                    })
+                    .is_err()
+                {
                     break;
                 }
             }
@@ -113,6 +129,8 @@ impl Workspace {
             log_scroll: ScrollHandle::default(),
             log_len: 0,
             log_tail_ts: 0,
+            license_scroll: VirtualListScrollHandle::new(),
+            license_expanded: None,
             language_select,
             _language_sub: Some(language_sub),
             _appearance: None,
@@ -323,6 +341,7 @@ impl Workspace {
                 .graph_page(window, cx, bg, surface, border, muted)
                 .into_any_element(),
             AppPage::Settings => self.settings_page(cx, muted).into_any_element(),
+            AppPage::Licenses => self.licenses_page(cx, muted).into_any_element(),
             AppPage::Log => self.log_page(cx, muted).into_any_element(),
         }
     }

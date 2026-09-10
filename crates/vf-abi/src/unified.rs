@@ -10,14 +10,10 @@ pub const VF_UNIFIED_SHAPE_COUNT: usize = UnifiedExpression::Max as usize + 1;
 
 /// Standard ARKit / PerfectSync blendshape count.
 pub const ARKIT_BLENDSHAPE_COUNT: u32 = 52;
-/// PICO native blendshape count (52 ARKit-like + 20 visemes).
+/// PICO native weight count (52 ARKit-like + 20 visemes).
 pub const PICO_BLENDSHAPE_COUNT: u32 = 72;
 /// ARKit viseme count packed after the 52 expression shapes on PICO.
 pub const VISEME_COUNT: u32 = 20;
-
-pub const SCHEMA_ARKIT52: &str = "arkit52";
-pub const SCHEMA_PICO72: &str = "pico72";
-pub const SCHEMA_VISEMES20: &str = "visemes20";
 
 /// Anatomical Unified Expressions, in VRCFT order (C# enum starting at 0).
 #[repr(u32)]

@@ -71,16 +71,6 @@ pub(crate) fn pico_to_arkit(pico: &[f32]) -> [f32; ARKIT_BLENDSHAPE_COUNT as usi
     out
 }
 
-pub fn pico_visemes(pico: &[f32]) -> [f32; 20] {
-    let mut v = [0f32; 20];
-    for i in 0..20 {
-        if let Some(x) = pico.get(52 + i) {
-            v[i] = *x;
-        }
-    }
-    v
-}
-
 /// Standard ARKit 52 names (Apple order).
 #[allow(dead_code)]
 pub const ARKIT_NAMES: [&str; 52] = [

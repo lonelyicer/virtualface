@@ -1,7 +1,7 @@
 use crate::ue::UeMapper;
 use vf_sdk::{
     Category, Host, Node, NodeDescriptor, NodeStatus, ParamDef, PortDesc, PortIo, ProcessCtx,
-    Result, SCHEMA_VISEMES20, param_f32,
+    Result, param_f32,
 };
 
 /// Generates a looping Unified Expressions signal for tests and UI demos (no hardware).
@@ -17,7 +17,6 @@ impl Node for SyntheticSource {
         NodeDescriptor::new("pico.synthetic", "Synthetic Face Source", Category::Input)
             .source()
             .output(PortDesc::unified("unified"))
-            .output(PortDesc::blendshapes("visemes", SCHEMA_VISEMES20, 20))
             .output(PortDesc::float("timeout"))
             .param(ParamDef::float("hz", "Frequency", 0.4, 0.05, 5.0, 0.05))
             .param(ParamDef::float(
@@ -53,12 +52,7 @@ impl Node for SyntheticSource {
         arkit[4] = (self.phase.sin() * 0.2).max(0.0);
         arkit[11] = arkit[4];
         *io.output_unified_mut(0)? = self.mapper.map_arkit(&arkit, ctx.now_us);
-        let vis = io.output_blendshapes_mut(1)?;
-        vis.fill(0.0);
-        if !vis.is_empty() {
-            vis[0] = s;
-        }
-        io.output_float(2, 0.0)?;
+        io.output_float(1, 0.0)?;
         Ok(())
     }
 

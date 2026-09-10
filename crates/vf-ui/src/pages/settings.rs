@@ -1,4 +1,5 @@
 use crate::i18n::{T, t};
+use crate::page::AppPage;
 use crate::workspace::Workspace;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
@@ -76,6 +77,26 @@ impl Workspace {
                             .load_errors
                             .iter()
                             .map(|e| div().text_xs().text_color(rgb(0xef4444)).child(e.clone())),
+                    ),
+            )
+            .child(
+                GroupBox::new()
+                    .id("set-licenses")
+                    .outline()
+                    .title(t(cx, T::SettingsLicenses))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(t(cx, T::SettingsLicensesHint)),
+                    )
+                    .child(
+                        Button::new("set-licenses-open")
+                            .label(t(cx, T::SettingsLicensesOpen))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.page = AppPage::Licenses;
+                                cx.notify();
+                            })),
                     ),
             )
     }

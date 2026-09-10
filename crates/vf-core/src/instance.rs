@@ -143,7 +143,6 @@ impl Drop for NodeInstance {
 pub enum PortBuffer {
     Scalar,
     Unified(Box<VfUnifiedFrame>),
-    Floats { data: Vec<f32>, schema: CString },
     Bytes { data: Vec<u8>, tag: CString },
 }
 
@@ -151,13 +150,6 @@ impl PortBuffer {
     pub fn from_port(tag: VfValueTag, schema: &str, capacity: u32) -> Self {
         match tag {
             VfValueTag::UnifiedFrame => PortBuffer::Unified(Box::new(VfUnifiedFrame::default())),
-            VfValueTag::Blendshapes => {
-                let cap = capacity.max(1) as usize;
-                PortBuffer::Floats {
-                    data: vec![0.0; cap],
-                    schema: CString::new(schema).unwrap_or_default(),
-                }
-            }
             VfValueTag::Bytes => {
                 let cap = capacity.max(1) as usize;
                 PortBuffer::Bytes {
@@ -172,18 +164,6 @@ impl PortBuffer {
     pub fn as_value(&mut self, tag: VfValueTag) -> VfValue {
         match self {
             PortBuffer::Unified(f) => VfValue::unified(f.as_mut()),
-            PortBuffer::Floats { data, schema } => VfValue {
-                tag: VfValueTag::Blendshapes,
-                _pad: 0,
-                payload: vf_abi::VfPayload {
-                    blendshapes: vf_abi::VfFloatBuf {
-                        schema: schema.as_ptr(),
-                        ptr: data.as_mut_ptr(),
-                        len: data.len() as u32,
-                        cap: data.len() as u32,
-                    },
-                },
-            },
             PortBuffer::Bytes { data, tag: t } => VfValue {
                 tag: VfValueTag::Bytes,
                 _pad: 0,
@@ -216,11 +196,6 @@ pub fn snapshot_value(v: &VfValue) -> SnapshotValue {
             let f = unsafe { v.as_unified() };
             SnapshotValue::Unified(f.cloned().unwrap_or_default())
         }
-        VfValueTag::Blendshapes => {
-            let buf = unsafe { v.payload.blendshapes };
-            let sl = unsafe { buf.as_slice() };
-            SnapshotValue::Blendshapes(sl.to_vec())
-        }
         VfValueTag::Bytes => {
             let b = unsafe { v.payload.bytes };
             if b.ptr.is_null() || b.len == 0 {
@@ -243,11 +218,22 @@ pub enum SnapshotValue {
     Vec2([f32; 2]),
     Vec3([f32; 3]),
     Unified(VfUnifiedFrame),
-    Blendshapes(Vec<f32>),
     Text(String),
 }
 
 impl SnapshotValue {
+    pub fn payload_bytes(&self) -> usize {
+        match self {
+            Self::Empty => 0,
+            Self::Float(_) | Self::Bool(_) => 4,
+            Self::Int(_) => 8,
+            Self::Vec2(_) => 8,
+            Self::Vec3(_) => 12,
+            Self::Unified(_) => std::mem::size_of::<VfUnifiedFrame>(),
+            Self::Text(s) => s.len(),
+        }
+    }
+
     pub fn preview(&self) -> String {
         match self {
             Self::Empty => "—".into(),
@@ -262,11 +248,6 @@ impl SnapshotValue {
                     "jaw {jaw:.2}  eye {:.2}/{:.2}",
                     f.eye.left.openness, f.eye.right.openness
                 )
-            }
-            Self::Blendshapes(s) => {
-                let n = s.len().min(4);
-                let body: Vec<String> = s[..n].iter().map(|v| format!("{v:.2}")).collect();
-                format!("[{} …] n={}", body.join(", "), s.len())
             }
             Self::Text(s) => {
                 if s.chars().count() > 24 {

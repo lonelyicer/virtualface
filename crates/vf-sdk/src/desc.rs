@@ -50,15 +50,6 @@ impl PortDesc {
         }
     }
 
-    pub const fn blendshapes(name: &'static str, schema: &'static str, capacity: u32) -> Self {
-        Self {
-            name,
-            ty: VfValueTag::Blendshapes,
-            schema,
-            capacity,
-        }
-    }
-
     pub const fn float(name: &'static str) -> Self {
         Self {
             name,

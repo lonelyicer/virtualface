@@ -1349,7 +1349,11 @@ impl Workspace {
             let type_sub = cx.subscribe_in(
                 &type_select,
                 window,
-                |this: &mut VarCreateForm, _, ev: &SelectEvent<SearchableVec<VarTypeChoice>>, window, cx| {
+                |this: &mut VarCreateForm,
+                 _,
+                 ev: &SelectEvent<SearchableVec<VarTypeChoice>>,
+                 window,
+                 cx| {
                     if let SelectEvent::Confirm(Some(next)) = ev {
                         this.apply_type(*next, window, cx);
                     }

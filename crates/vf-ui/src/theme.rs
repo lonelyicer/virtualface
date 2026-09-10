@@ -105,7 +105,6 @@ pub fn tag_color(tag: VfValueTag) -> u32 {
         VfValueTag::Bool => 0xef4444,
         VfValueTag::Vec2 | VfValueTag::Vec3 => 0x06b6d4,
         VfValueTag::UnifiedFrame => 0xa855f7,
-        VfValueTag::Blendshapes => 0x3b82f6,
         VfValueTag::Bytes => 0x78716c,
         VfValueTag::Empty => 0x52525b,
     }

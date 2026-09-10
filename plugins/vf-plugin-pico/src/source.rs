@@ -1,5 +1,4 @@
 use crate::packet::parse_pico_packet;
-use crate::remap::pico_visemes;
 use crate::ue::UeMapper;
 use std::net::UdpSocket;
 use std::sync::Mutex;
@@ -12,11 +11,11 @@ use std::time::{Duration, Instant};
 use vf_abi::VfUnifiedFrame;
 use vf_sdk::{
     Category, Host, Node, NodeDescriptor, NodeStatus, ParamDef, PortDesc, PortIo, ProcessCtx,
-    Result, SCHEMA_VISEMES20, param_i64,
+    Result, param_i64,
 };
 
 struct Slot {
-    latest: Mutex<Option<(VfUnifiedFrame, [f32; 20], Instant)>>,
+    latest: Mutex<Option<(VfUnifiedFrame, Instant)>>,
     timeouts: std::sync::atomic::AtomicU64,
 }
 
@@ -33,7 +32,6 @@ impl Node for PicoUdpSource {
         NodeDescriptor::new("pico.udp_source", "PICO UDP Source", Category::Input)
             .source()
             .output(PortDesc::unified("unified"))
-            .output(PortDesc::blendshapes("visemes", SCHEMA_VISEMES20, 20))
             .output(PortDesc::float("timeout"))
             .param(ParamDef::int("port", "UDP Port", 29765, 1, 65535))
     }
@@ -70,22 +68,19 @@ impl Node for PicoUdpSource {
     }
 
     fn process(&mut self, ctx: &ProcessCtx, io: &mut PortIo<'_>) -> Result<()> {
-        let (mut frame, visemes, timeout) = {
+        let (mut frame, timeout) = {
             let g = self.slot.latest.lock().unwrap();
             match &*g {
-                Some((f, v, t)) => {
+                Some((f, t)) => {
                     let age = t.elapsed().as_secs_f32();
-                    (*f, *v, age)
+                    (*f, age)
                 }
-                None => (VfUnifiedFrame::default(), [0.0; 20], 1.0),
+                None => (VfUnifiedFrame::default(), 1.0),
             }
         };
         frame.timestamp_us = ctx.now_us;
         *io.output_unified_mut(0)? = frame;
-        let vis = io.output_blendshapes_mut(1)?;
-        let n = vis.len().min(visemes.len());
-        vis[..n].copy_from_slice(&visemes[..n]);
-        io.output_float(2, timeout)?;
+        io.output_float(1, timeout)?;
         Ok(())
     }
 
@@ -111,7 +106,7 @@ impl Node for PicoUdpSource {
             .lock()
             .unwrap()
             .as_ref()
-            .map(|(_, _, t)| t.elapsed());
+            .map(|(_, t)| t.elapsed());
         match age {
             Some(d) if d < Duration::from_millis(200) => {
                 NodeStatus::ok(format!("udp :{}  live", self.port))
@@ -143,8 +138,7 @@ fn recv_loop(port: u16, host: Host, slot: Arc<Slot>, stop: Arc<AtomicBool>) {
                 timeout_streak = 0;
                 if let Some(frame) = parse_pico_packet(&buf[..n]) {
                     let unified = mapper.map_pico(&frame.weights, host.now_us());
-                    let vis = pico_visemes(&frame.weights);
-                    *slot.latest.lock().unwrap() = Some((unified, vis, Instant::now()));
+                    *slot.latest.lock().unwrap() = Some((unified, Instant::now()));
                     host.wake();
                 }
             }

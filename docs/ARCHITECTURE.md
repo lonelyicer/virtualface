@@ -35,10 +35,9 @@ Hot path: host-owned `VfValue` buffers, `process(ctx, inputs, outputs)`. Cold pa
 ## Intermediate protocol
 
 - `UnifiedFrame` — VRCFT `UnifiedTrackingData` layout (`VfEyeData` + `shapes[89]` + `VfHeadData`). Shape indices match VRCFT `UnifiedExpressions`.
-- `Blendshapes` with schema `arkit52` / `pico72` / `visemes20`.
 - Scalars `float` / `int` / `bool` / `vec2` / `vec3`.
 
-Wires require matching `VfValueTag` and blendshape schema (`*` is a wildcard). One edge per input port. Cycles are rejected.
+Wires require matching `VfValueTag`. One edge per input port. Cycles are rejected.
 
 ## Engine
 

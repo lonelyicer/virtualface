@@ -20,7 +20,6 @@ impl PortType {
             4 => VfValueTag::Vec2,
             5 => VfValueTag::Vec3,
             6 => VfValueTag::UnifiedFrame,
-            7 => VfValueTag::Blendshapes,
             8 => VfValueTag::Bytes,
             _ => VfValueTag::Empty,
         }

@@ -6,6 +6,7 @@ pub(crate) enum AppPage {
     Home,
     Graph,
     Settings,
+    Licenses,
     Log,
 }
 
@@ -17,6 +18,7 @@ impl AppPage {
                 Self::Home => T::NavHome,
                 Self::Graph => T::NavGraph,
                 Self::Settings => T::NavSettings,
+                Self::Licenses => T::LicensesTitle,
                 Self::Log => T::NavLog,
             },
         )
