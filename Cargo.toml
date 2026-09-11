@@ -15,7 +15,7 @@ members = [
 version = "0.1.0"
 edition = "2024"
 license = "PolyForm-Noncommercial-1.0.0"
-repository = "https://github.com/ringlo/virtualface"
+repository = "https://github.com/lonelyicer/virtualface"
 
 [workspace.dependencies]
 vf-abi = { path = "crates/vf-abi" }
