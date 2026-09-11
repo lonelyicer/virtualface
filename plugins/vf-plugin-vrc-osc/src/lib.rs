@@ -2,6 +2,7 @@ mod avatar_cfg;
 mod mdns_vrc;
 mod oscquery;
 mod output;
+mod packet;
 mod params;
 mod raw;
 

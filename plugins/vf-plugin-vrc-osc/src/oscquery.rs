@@ -21,7 +21,8 @@ pub struct QuerySnapshot {
     pub send_all: bool,
     pub force_all: bool,
     pub avatar_id: String,
-    pub avatar_params: HashSet<String>,
+    // Shared across snapshots; replaced only when the address set changes.
+    pub avatar_params: Arc<HashSet<String>>,
     pub native_gaze: bool,
     pub native_lid: bool,
     pub discovered: bool,
@@ -34,6 +35,16 @@ pub struct QuerySnapshot {
 }
 
 impl QuerySnapshot {
+    pub fn same_routing(&self, other: &Self) -> bool {
+        self.avatar_id == other.avatar_id
+            && Arc::ptr_eq(&self.avatar_params, &other.avatar_params)
+            && self.send_all == other.send_all
+            && self.force_all == other.force_all
+            && self.avatar_loaded == other.avatar_loaded
+            && self.native_gaze == other.native_gaze
+            && self.native_lid == other.native_lid
+    }
+
     pub fn target_addr(&self, name: &str, prefix: &str) -> Option<String> {
         if let Some(addr) = find_param_address(&self.avatar_params, name) {
             return Some(addr);
@@ -100,7 +111,7 @@ impl OscQueryHub {
             send_all,
             force_all: false,
             avatar_id: String::new(),
-            avatar_params: HashSet::new(),
+            avatar_params: Arc::new(HashSet::new()),
             native_gaze: false,
             native_lid: false,
             discovered: false,
@@ -315,7 +326,9 @@ fn commit_avatar(
     if !id.is_empty() {
         g.snap.avatar_id = id.clone();
     }
-    g.snap.avatar_params = params;
+    if *g.snap.avatar_params != params {
+        g.snap.avatar_params = Arc::new(params);
+    }
     g.snap.native_gaze = native_gaze;
     g.snap.native_lid = native_lid;
     g.snap.avatar_loaded = true;
@@ -590,8 +603,67 @@ pub fn gaze_pitch_yaw(gaze: [f32; 2]) -> (f32, f32) {
 }
 
 #[cfg(test)]
+pub(crate) fn test_snapshot(addresses: &[&str]) -> QuerySnapshot {
+    QuerySnapshot {
+        send_host: "127.0.0.1".into(),
+        send_port: 0,
+        send_all: false,
+        force_all: false,
+        avatar_id: "test-avatar".into(),
+        avatar_params: Arc::new(addresses.iter().map(|s| (*s).into()).collect()),
+        native_gaze: false,
+        native_lid: false,
+        discovered: true,
+        avatar_loaded: true,
+        query_host: String::new(),
+        query_port: 0,
+        http_port: 0,
+        osc_in_port: 0,
+        status: String::new(),
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn avatar_refresh_shares_unchanged_addresses_but_invalidates_updates() {
+        let initial = test_snapshot(&["/avatar/parameters/v2/JawOpen"]);
+        let state = Arc::new(Mutex::new(HubState {
+            snap: initial.clone(),
+            avatar_dirty: false,
+            host_info_hit: false,
+        }));
+        commit_avatar(
+            &state,
+            initial.avatar_id.clone(),
+            (*initial.avatar_params).clone(),
+            "renamed",
+        );
+        let first = state.lock().unwrap().snap.clone();
+        assert!(Arc::ptr_eq(&initial.avatar_params, &first.avatar_params));
+        commit_avatar(
+            &state,
+            initial.avatar_id.clone(),
+            (*first.avatar_params).clone(),
+            "renamed again",
+        );
+        let unchanged = state.lock().unwrap().snap.clone();
+        assert!(first.same_routing(&unchanged));
+        let mut addresses = (*first.avatar_params).clone();
+        addresses.insert("/avatar/parameters/FT/v2/EyeLeftX".into());
+        commit_avatar(
+            &state,
+            initial.avatar_id.clone(),
+            addresses,
+            "renamed again",
+        );
+        let changed = state.lock().unwrap().snap.clone();
+        assert_eq!(first.avatar_id, changed.avatar_id);
+        assert!(!first.same_routing(&changed));
+        assert!(!Arc::ptr_eq(&first.avatar_params, &changed.avatar_params));
+    }
 
     #[test]
     fn host_info_has_port() {

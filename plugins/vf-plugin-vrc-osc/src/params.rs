@@ -484,16 +484,17 @@ pub fn derive_v2(f: &VfUnifiedFrame) -> Vec<(String, f32)> {
     out
 }
 
+/// Quantize the magnitude without wrapping full scale back to zero.
+pub fn binary_magnitude(value: f32, bits: u32) -> u32 {
+    let levels = 1u32 << bits.min(8);
+    ((value.abs() * levels as f32) as u32).min(levels - 1)
+}
+
 pub fn encode_binary(addr: &str, value: f32, bits: u32) -> Vec<(String, bool)> {
+    let bits = bits.min(8);
     let mut msgs = Vec::new();
     msgs.push((format!("{addr}Negative"), value < 0.0));
-    let v = value.abs();
-    let max_int = 2u32.pow(bits.max(1));
-    let big = if v > 0.99999 {
-        max_int as i32
-    } else {
-        (v * max_int as f32) as i32
-    };
+    let big = binary_magnitude(value, bits);
     for i in 0..bits {
         let idx = 1u32 << i;
         msgs.push((format!("{addr}{idx}"), ((big >> i) & 1) == 1));
@@ -504,6 +505,19 @@ pub fn encode_binary(addr: &str, value: f32, bits: u32) -> Vec<(String, bool)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn binary_full_scale_saturates_for_every_supported_width() {
+        for bits in 1..=8 {
+            assert_eq!(binary_magnitude(0.0, bits), 0);
+            assert_eq!(binary_magnitude(0.5, bits), 1 << (bits - 1));
+            for value in [1.0, 1.1, -1.0] {
+                let encoded = encode_binary("/JawOpen", value, bits);
+                assert_eq!(encoded[0].1, value < 0.0);
+                assert!(encoded[1..].iter().all(|(_, b)| *b));
+            }
+        }
+    }
 
     #[test]
     fn jaw_x_and_eyelid() {
