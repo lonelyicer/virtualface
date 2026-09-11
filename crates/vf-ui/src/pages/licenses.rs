@@ -97,9 +97,9 @@ impl Workspace {
                                 let border = cx.theme().border;
                                 let mut out = Vec::with_capacity(range.len());
                                 for i in range {
-                                    out.push(this.render_license_row(
-                                        i, rows[i], muted, border, cx,
-                                    ));
+                                    out.push(
+                                        this.render_license_row(i, rows[i], muted, border, cx),
+                                    );
                                 }
                                 out
                             }

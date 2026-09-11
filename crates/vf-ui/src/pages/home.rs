@@ -54,11 +54,7 @@ impl Workspace {
                         div()
                             .ml_auto()
                             .text_xs()
-                            .text_color(if running {
-                                rgb(0x22c55e).into()
-                            } else {
-                                muted
-                            })
+                            .text_color(if running { rgb(0x22c55e).into() } else { muted })
                             .child(if running {
                                 t(cx, T::HomeRunning)
                             } else {
@@ -95,9 +91,12 @@ impl Workspace {
                                     .child(t(cx, T::HomeNoActive)),
                             )
                         } else {
-                            box_.children(plugins.into_iter().enumerate().map(|(i, p)| {
-                                plugin_row(i, p, dt, running, muted)
-                            }))
+                            box_.children(
+                                plugins
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(i, p)| plugin_row(i, p, dt, running, muted)),
+                            )
                         }
                     }),
             )
@@ -122,11 +121,7 @@ fn active_plugin_io(graph: &Graph, snap: &Snapshot, session: &vf_core::Session) 
             .map(|s| s.outputs.iter().map(|v| v.payload_bytes()).sum())
             .unwrap_or(0);
         let in_bytes = incoming_bytes(graph, snap, n.id);
-        let status = snap
-            .nodes
-            .get(&n.id.0)
-            .map(|s| s.status_level)
-            .unwrap_or(3);
+        let status = snap.nodes.get(&n.id.0).map(|s| s.status_level).unwrap_or(3);
         let entry = by_id.entry(ty.plugin_id.clone()).or_insert(PluginIo {
             name: ty.plugin_name.clone(),
             in_bytes: 0,
@@ -152,11 +147,7 @@ fn worse_status(a: u32, b: u32) -> u32 {
             _ => 0,
         }
     }
-    if rank(b) > rank(a) {
-        b
-    } else {
-        a
-    }
+    if rank(b) > rank(a) { b } else { a }
 }
 
 fn incoming_bytes(graph: &Graph, snap: &Snapshot, id: NodeId) -> usize {

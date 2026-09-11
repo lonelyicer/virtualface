@@ -1,20 +1,299 @@
-/// Build C ABI trampolines and `vf_plugin_entry` for a list of [`crate::Node`] types.
+/// Build C ABI trampolines and `vf_plugin_entry`.
+///
+/// Catalog fields may appear in any order. Optional: `description`, `author`,
+/// `license`, `homepage`, `repository`, `issues`, `keywords` (comma-separated).
 ///
 /// ```ignore
 /// vf_sdk::export_plugin! {
 ///     id: "vf.pico",
 ///     name: "PICO Input",
 ///     version: "0.1.0",
+///     description: "PICO Connect UDP face tracking",
+///     repository: "https://github.com/lonelyicer/virtualface",
 ///     nodes: [PicoUdpSource]
 /// }
 /// ```
 #[macro_export]
 macro_rules! export_plugin {
+    ($($input:tt)*) => {
+        $crate::__export_plugin_parse! {
+            @id() @name() @version()
+            @description() @author() @license()
+            @homepage() @repository() @issues() @keywords()
+            @nodes()
+            $($input)*
+        }
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __export_plugin_parse {
     (
-        id: $id:literal,
-        name: $name:literal,
-        version: $version:literal,
-        nodes: [$($node:ty),+ $(,)?]
+        @id($id:literal) @name($name:literal) @version($version:literal)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),+)
+    ) => {
+        $crate::__export_plugin_emit! {
+            $id $name $version
+            [$($description)?] [$($author)?] [$($license)?]
+            [$($homepage)?] [$($repository)?] [$($issues)?] [$($keywords)?]
+            [$($node),+]
+        }
+    };
+
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        id: $new:literal, $($rest:tt)*
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($new) @name($($name)?) @version($($version)?)
+            @description($($description)?) @author($($author)?)
+            @license($($license)?) @homepage($($homepage)?)
+            @repository($($repository)?) @issues($($issues)?)
+            @keywords($($keywords)?)
+            @nodes($($node),*)
+            $($rest)*
+        }
+    };
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        name: $new:literal, $($rest:tt)*
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($($id)?) @name($new) @version($($version)?)
+            @description($($description)?) @author($($author)?)
+            @license($($license)?) @homepage($($homepage)?)
+            @repository($($repository)?) @issues($($issues)?)
+            @keywords($($keywords)?)
+            @nodes($($node),*)
+            $($rest)*
+        }
+    };
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        version: $new:literal, $($rest:tt)*
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($($id)?) @name($($name)?) @version($new)
+            @description($($description)?) @author($($author)?)
+            @license($($license)?) @homepage($($homepage)?)
+            @repository($($repository)?) @issues($($issues)?)
+            @keywords($($keywords)?)
+            @nodes($($node),*)
+            $($rest)*
+        }
+    };
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        description: $new:literal, $($rest:tt)*
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($($id)?) @name($($name)?) @version($($version)?)
+            @description($new) @author($($author)?)
+            @license($($license)?) @homepage($($homepage)?)
+            @repository($($repository)?) @issues($($issues)?)
+            @keywords($($keywords)?)
+            @nodes($($node),*)
+            $($rest)*
+        }
+    };
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        author: $new:literal, $($rest:tt)*
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($($id)?) @name($($name)?) @version($($version)?)
+            @description($($description)?) @author($new)
+            @license($($license)?) @homepage($($homepage)?)
+            @repository($($repository)?) @issues($($issues)?)
+            @keywords($($keywords)?)
+            @nodes($($node),*)
+            $($rest)*
+        }
+    };
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        license: $new:literal, $($rest:tt)*
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($($id)?) @name($($name)?) @version($($version)?)
+            @description($($description)?) @author($($author)?)
+            @license($new) @homepage($($homepage)?)
+            @repository($($repository)?) @issues($($issues)?)
+            @keywords($($keywords)?)
+            @nodes($($node),*)
+            $($rest)*
+        }
+    };
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        homepage: $new:literal, $($rest:tt)*
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($($id)?) @name($($name)?) @version($($version)?)
+            @description($($description)?) @author($($author)?)
+            @license($($license)?) @homepage($new)
+            @repository($($repository)?) @issues($($issues)?)
+            @keywords($($keywords)?)
+            @nodes($($node),*)
+            $($rest)*
+        }
+    };
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        repository: $new:literal, $($rest:tt)*
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($($id)?) @name($($name)?) @version($($version)?)
+            @description($($description)?) @author($($author)?)
+            @license($($license)?) @homepage($($homepage)?)
+            @repository($new) @issues($($issues)?)
+            @keywords($($keywords)?)
+            @nodes($($node),*)
+            $($rest)*
+        }
+    };
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        issues: $new:literal, $($rest:tt)*
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($($id)?) @name($($name)?) @version($($version)?)
+            @description($($description)?) @author($($author)?)
+            @license($($license)?) @homepage($($homepage)?)
+            @repository($($repository)?) @issues($new)
+            @keywords($($keywords)?)
+            @nodes($($node),*)
+            $($rest)*
+        }
+    };
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        keywords: $new:literal, $($rest:tt)*
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($($id)?) @name($($name)?) @version($($version)?)
+            @description($($description)?) @author($($author)?)
+            @license($($license)?) @homepage($($homepage)?)
+            @repository($($repository)?) @issues($($issues)?)
+            @keywords($new)
+            @nodes($($node),*)
+            $($rest)*
+        }
+    };
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        nodes: [$($new:path),+ $(,)?], $($rest:tt)*
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($($id)?) @name($($name)?) @version($($version)?)
+            @description($($description)?) @author($($author)?)
+            @license($($license)?) @homepage($($homepage)?)
+            @repository($($repository)?) @issues($($issues)?)
+            @keywords($($keywords)?)
+            @nodes($($new),+)
+            $($rest)*
+        }
+    };
+    (
+        @id($($id:literal)?) @name($($name:literal)?) @version($($version:literal)?)
+        @description($($description:literal)?) @author($($author:literal)?)
+        @license($($license:literal)?) @homepage($($homepage:literal)?)
+        @repository($($repository:literal)?) @issues($($issues:literal)?)
+        @keywords($($keywords:literal)?)
+        @nodes($($node:path),*)
+        nodes: [$($new:path),+ $(,)?]
+    ) => {
+        $crate::__export_plugin_parse! {
+            @id($($id)?) @name($($name)?) @version($($version)?)
+            @description($($description)?) @author($($author)?)
+            @license($($license)?) @homepage($($homepage)?)
+            @repository($($repository)?) @issues($($issues)?)
+            @keywords($($keywords)?)
+            @nodes($($new),+)
+        }
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __opt_str {
+    () => {
+        ""
+    };
+    ($v:literal) => {
+        $v
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __export_plugin_emit {
+    (
+        $id:literal $name:literal $version:literal
+        [$($description:literal)?] [$($author:literal)?] [$($license:literal)?]
+        [$($homepage:literal)?] [$($repository:literal)?] [$($issues:literal)?]
+        [$($keywords:literal)?]
+        [$($node:path),+]
     ) => {
         #[unsafe(no_mangle)]
         pub extern "C" fn vf_plugin_entry(host_abi: u32) -> *const ::vf_abi::VfPluginDescriptor {
@@ -38,6 +317,13 @@ macro_rules! export_plugin {
                     node_count: nodes.len() as u32,
                     _pad2: 0,
                     nodes: nodes.as_ptr(),
+                    description: concat!($crate::__opt_str!($($description)?), "\0").as_ptr().cast(),
+                    author: concat!($crate::__opt_str!($($author)?), "\0").as_ptr().cast(),
+                    license: concat!($crate::__opt_str!($($license)?), "\0").as_ptr().cast(),
+                    homepage: concat!($crate::__opt_str!($($homepage)?), "\0").as_ptr().cast(),
+                    repository: concat!($crate::__opt_str!($($repository)?), "\0").as_ptr().cast(),
+                    issues: concat!($crate::__opt_str!($($issues)?), "\0").as_ptr().cast(),
+                    keywords: concat!($crate::__opt_str!($($keywords)?), "\0").as_ptr().cast(),
                 }
             }) as *const _
         }

@@ -13,5 +13,12 @@ vf_sdk::export_plugin! {
     id: "vf.vrc_osc",
     name: "VRChat OSC Output",
     version: "0.1.0",
+    description: "Sends Unified Expressions to VRChat over OSC / OSCQuery",
+    author: "VirtualFace contributors",
+    license: "PolyForm-Noncommercial-1.0.0",
+    homepage: "https://github.com/lonelyicer/virtualface",
+    repository: "https://github.com/lonelyicer/virtualface",
+    issues: "https://github.com/lonelyicer/virtualface/issues",
+    keywords: "vrchat, osc, output",
     nodes: [VrcOscOutput, OscRawOutput]
 }

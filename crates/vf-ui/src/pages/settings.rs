@@ -39,15 +39,26 @@ impl Workspace {
                     .outline()
                     .title(t(cx, T::SettingsPlugins))
                     .children(self.session.host.plugins().iter().map(|p| {
+                        let mut detail = format!("{}  {}  {}", p.id, p.version, p.path.display());
+                        if !p.license.is_empty() {
+                            detail.push_str("  ");
+                            detail.push_str(&p.license);
+                        }
                         v_flex()
                             .gap_1()
                             .child(div().font_weight(FontWeight::MEDIUM).child(p.name.clone()))
-                            .child(div().text_xs().text_color(muted).child(format!(
-                                "{}  {}  {}",
-                                p.id,
-                                p.version,
-                                p.path.display()
-                            )))
+                            .when(!p.description.is_empty(), |el| {
+                                el.child(div().text_xs().child(p.description.clone()))
+                            })
+                            .child(div().text_xs().text_color(muted).child(detail))
+                            .when(!p.repository.is_empty(), |el| {
+                                el.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(muted)
+                                        .child(p.repository.clone()),
+                                )
+                            })
                     }))
                     .children(
                         self.session

@@ -41,7 +41,7 @@ mod tests {
     #[test]
     fn abi_sizes_align_64() {
         assert_eq!(align_of::<VfPluginDescriptor>(), 8);
-        assert_eq!(size_of::<VfPluginDescriptor>(), 48);
+        assert_eq!(size_of::<VfPluginDescriptor>(), 104);
         assert_eq!(size_of::<VfPortDesc>(), 32);
         assert_eq!(size_of::<VfNodeDescriptor>(), 80);
         assert_eq!(size_of::<VfProcessCtx>(), 24);

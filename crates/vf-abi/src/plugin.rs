@@ -4,7 +4,7 @@ use crate::value::VfValueTag;
 use core::ffi::{c_char, c_void};
 
 /// Bump only on breaking layout changes. Hosts refuse plugins with a different version.
-pub const VF_ABI_VERSION: u32 = 1;
+pub const VF_ABI_VERSION: u32 = 2;
 
 pub const VF_OK: i32 = 0;
 pub const VF_ERR: i32 = -1;
@@ -59,6 +59,14 @@ pub struct VfPluginDescriptor {
     pub node_count: u32,
     pub _pad2: u32,
     pub nodes: *const VfNodeDescriptor,
+    pub description: *const c_char,
+    pub author: *const c_char,
+    pub license: *const c_char,
+    pub homepage: *const c_char,
+    pub repository: *const c_char,
+    pub issues: *const c_char,
+    /// Comma-separated keywords; empty string if none.
+    pub keywords: *const c_char,
 }
 
 unsafe impl Send for VfPluginDescriptor {}

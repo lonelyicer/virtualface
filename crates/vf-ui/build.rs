@@ -198,7 +198,9 @@ fn fallback_from_spdx(spdx: &str, catalog: &HashMap<String, String>) -> String {
         if id.is_empty() {
             continue;
         }
-        if id.eq_ignore_ascii_case("or") || id.eq_ignore_ascii_case("and") || id.eq_ignore_ascii_case("with")
+        if id.eq_ignore_ascii_case("or")
+            || id.eq_ignore_ascii_case("and")
+            || id.eq_ignore_ascii_case("with")
         {
             continue;
         }
@@ -245,7 +247,13 @@ fn intern_text(
 }
 
 fn read_app_license(workspace: &Path) -> String {
-    for name in ["LICENSE.md", "LICENSE", "LICENSE.txt", "LICENCE.md", "LICENCE"] {
+    for name in [
+        "LICENSE.md",
+        "LICENSE",
+        "LICENSE.txt",
+        "LICENCE.md",
+        "LICENCE",
+    ] {
         if let Some(text) = read_text(&workspace.join(name)) {
             return text;
         }

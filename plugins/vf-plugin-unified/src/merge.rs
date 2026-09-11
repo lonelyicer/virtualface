@@ -1,4 +1,4 @@
-use vf_abi::{UnifiedExpression, VfUnifiedFrame, VF_VALID_EXPR, VF_VALID_EYE, VF_VALID_HEAD};
+use vf_abi::{UnifiedExpression, VF_VALID_EXPR, VF_VALID_EYE, VF_VALID_HEAD, VfUnifiedFrame};
 use vf_sdk::{
     Category, Host, Node, NodeDescriptor, NodeStatus, PortDesc, PortIo, ProcessCtx, Result,
 };

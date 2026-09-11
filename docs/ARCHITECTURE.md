@@ -6,7 +6,7 @@ The host is a graph runner. Face-tracking semantics live in plugins.
 
 | Crate | Role |
 | --- | --- |
-| `vf-abi` | Versioned C ABI (`VF_ABI_VERSION = 1`). Zero dependencies. |
+| `vf-abi` | Versioned C ABI (`VF_ABI_VERSION = 2`). Zero dependencies. |
 | `vf-sdk` | Safe `Node` trait + `export_plugin!` for plugin authors. |
 | `vf-core` | `libloading` host, graph compile (`petgraph` toposort), engine thread. |
 | `vf-ui` | gpui-kit workspace: palette, node canvas, inspector, log. |
@@ -26,7 +26,11 @@ Each cdylib exports:
 const VfPluginDescriptor* vf_plugin_entry(uint32_t host_abi);
 ```
 
-If `host_abi != VF_ABI_VERSION` the function returns null and the host skips the library.
+If `host_abi != VF_ABI_VERSION` the entry function returns null and the host skips the library.
+
+`VfPluginDescriptor` carries catalog fields for a future plugin manager: `id`, `name`, `version`, `description`, `author`, `license`, `homepage`, `repository`, `issues`, and comma-separated `keywords`, plus the node table.
+
+ABI changes: only append fields and bump `VF_ABI_VERSION`. The host refuses a mismatched major.
 
 Hot path: host-owned `VfValue` buffers, `process(ctx, inputs, outputs)`. Cold path: JSON for params/state.
 
@@ -93,10 +97,10 @@ export_plugin! {
     id: "demo",
     name: "Demo",
     version: "0.1.0",
+    description: "Example gain node",
+    repository: "https://github.com/lonelyicer/virtualface",
     nodes: [Gain]
 }
 ```
 
 Set `crate-type = ["cdylib", "rlib"]`. Drop the resulting `lib*.so` / `*.dll` / `lib*.dylib` in a scanned plugin directory.
-
-ABI changes: only append fields and bump `VF_ABI_VERSION`. The host refuses a mismatched major.

@@ -94,7 +94,7 @@ fn main() {
                             format!("failed to parse archive {}: {e}", meta.name),
                         );
                     }
-                }
+                },
                 Err(e) => {
                     log.log(
                         0,
@@ -118,7 +118,7 @@ fn main() {
                             format!("failed to parse graph {}: {e}", path.display()),
                         );
                     }
-                }
+                },
                 Err(e) => {
                     log.log(
                         0,

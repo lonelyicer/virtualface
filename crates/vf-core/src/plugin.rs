@@ -9,6 +9,13 @@ pub struct LoadedPlugin {
     pub id: String,
     pub name: String,
     pub version: String,
+    pub description: String,
+    pub author: String,
+    pub license: String,
+    pub homepage: String,
+    pub repository: String,
+    pub issues: String,
+    pub keywords: String,
     pub path: PathBuf,
     _lib: Library,
 }
@@ -97,9 +104,9 @@ impl PluginHost {
                 host: VF_ABI_VERSION,
             });
         }
-        let id = unsafe { cstr(desc.id) };
-        let name = unsafe { cstr(desc.name) };
-        let version = unsafe { cstr(desc.version) };
+        let id = cstr(desc.id);
+        let name = cstr(desc.name);
+        let version = cstr(desc.version);
         let nodes = if desc.nodes.is_null() {
             &[][..]
         } else {
@@ -113,10 +120,27 @@ impl PluginHost {
             id: id.clone(),
             name,
             version,
+            description: cstr(desc.description),
+            author: cstr(desc.author),
+            license: cstr(desc.license),
+            homepage: cstr(desc.homepage),
+            repository: cstr(desc.repository),
+            issues: cstr(desc.issues),
+            keywords: cstr(desc.keywords),
             path: path.to_path_buf(),
             _lib: lib,
         });
         Ok(id)
+    }
+}
+
+fn cstr(p: *const std::ffi::c_char) -> String {
+    if p.is_null() {
+        String::new()
+    } else {
+        unsafe { std::ffi::CStr::from_ptr(p) }
+            .to_string_lossy()
+            .into_owned()
     }
 }
 
@@ -138,14 +162,6 @@ fn is_plugin_lib(path: &Path) -> bool {
         .and_then(|p| p.file_name())
         .and_then(|s| s.to_str())
         == Some("plugins")
-}
-
-unsafe fn cstr(p: *const std::ffi::c_char) -> String {
-    if p.is_null() {
-        String::new()
-    } else {
-        unsafe { std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned() }
-    }
 }
 
 /// Default directories searched when none are supplied.
