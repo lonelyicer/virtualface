@@ -383,7 +383,7 @@ mod tests {
         _: u64,
         _: *const std::ffi::c_char,
     ) -> *mut std::ffi::c_void {
-        1 as *mut _
+        std::ptr::dangling_mut()
     }
 
     fn ty(id: &str, cat: Category, ins: &[VfValueTag], outs: &[VfValueTag]) -> NodeType {

@@ -165,7 +165,7 @@ fn run_headless(session: Session) {
     while !stop.load(Ordering::Relaxed) {
         std::thread::sleep(Duration::from_millis(200));
         let snap = session.engine.snapshot();
-        if snap.tick % 100 == 0 && snap.tick > 0 {
+        if snap.tick.is_multiple_of(100) && snap.tick > 0 {
             session.host.log.log(
                 2,
                 None,

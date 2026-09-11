@@ -216,18 +216,18 @@ fn handle_cmd(inner: &mut EngineInner, cmd: EngineCommand) -> bool {
             inner.host_state.log.log(2, None, "engine stopped");
         }
         EngineCommand::SetParam(id, key, value) => {
-            if let Some(n) = inner.nodes.get_mut(&id) {
-                if let Err(e) = n.instance.set_param(&key, &value) {
-                    inner
-                        .host_state
-                        .log
-                        .log(1, Some(id.0), format!("set_param failed: {e}"));
-                }
+            if let Some(n) = inner.nodes.get_mut(&id)
+                && let Err(e) = n.instance.set_param(&key, &value)
+            {
+                inner
+                    .host_state
+                    .log
+                    .log(1, Some(id.0), format!("set_param failed: {e}"));
             }
-            if let Some(gn) = inner.graph.node_mut(id) {
-                if let Some(obj) = gn.params.as_object_mut() {
-                    obj.insert(key, value);
-                }
+            if let Some(gn) = inner.graph.node_mut(id)
+                && let Some(obj) = gn.params.as_object_mut()
+            {
+                obj.insert(key, value);
             }
         }
         EngineCommand::SwapPlan(plan, graph) => {
@@ -241,12 +241,11 @@ fn apply_plan(inner: &mut EngineInner, plan: ExecPlan, graph: Graph) {
     let was_running = inner.running;
     let keep: std::collections::HashSet<NodeId> = plan.order.iter().copied().collect();
     inner.nodes.retain(|id, rt| {
-        if keep.contains(id) {
-            if let Some(b) = plan.bindings.get(id) {
-                if rt.instance.type_id() == b.type_id {
-                    return true;
-                }
-            }
+        if keep.contains(id)
+            && let Some(b) = plan.bindings.get(id)
+            && rt.instance.type_id() == b.type_id
+        {
+            return true;
         }
         if was_running {
             rt.instance.stop();
@@ -267,18 +266,16 @@ fn apply_plan(inner: &mut EngineInner, plan: ExecPlan, graph: Graph) {
         let params = gn
             .map(|n| n.params.clone())
             .unwrap_or(serde_json::json!({}));
-        match NodeInstance::create(&ty, inner.host_api.as_ref(), id.0, &params) {
+        match unsafe { NodeInstance::create(&ty, inner.host_api.as_ref(), id.0, &params) } {
             Ok(mut inst) => {
                 if let Some(state) = gn.and_then(|n| n.state.clone()) {
                     let _ = inst.set_state(&state);
                 }
-                if was_running {
-                    if let Err(e) = inst.start() {
-                        inner
-                            .host_state
-                            .log
-                            .log(1, Some(id.0), format!("start failed: {e}"));
-                    }
+                if was_running && let Err(e) = inst.start() {
+                    inner
+                        .host_state
+                        .log
+                        .log(1, Some(id.0), format!("start failed: {e}"));
                 }
                 let mut out_bufs: Vec<PortBuffer> = ty
                     .outputs
@@ -341,10 +338,10 @@ fn refresh_runtime_ports(rt: &mut NodeRuntime) {
         .map(|p| p.value_tag())
         .collect();
     for (i, buf) in rt.out_bufs.iter_mut().enumerate() {
-        if let Some(tag) = tags.get(i) {
-            if i < rt.out_vals.len() {
-                rt.out_vals[i] = buf.as_value(*tag);
-            }
+        if let Some(tag) = tags.get(i)
+            && i < rt.out_vals.len()
+        {
+            rt.out_vals[i] = buf.as_value(*tag);
         }
     }
 }
@@ -378,12 +375,11 @@ fn run_tick(inner: &mut EngineInner) {
         // Assemble inputs from source outputs.
         let mut ins = vec![VfValue::empty(); binding.n_in];
         for (i, src) in binding.inputs.iter().enumerate() {
-            if let Some(p) = src {
-                if let Some(src_rt) = inner.nodes.get(&p.node) {
-                    if let Some(v) = src_rt.out_vals.get(p.port as usize) {
-                        ins[i] = *v;
-                    }
-                }
+            if let Some(p) = src
+                && let Some(src_rt) = inner.nodes.get(&p.node)
+                && let Some(v) = src_rt.out_vals.get(p.port as usize)
+            {
+                ins[i] = *v;
             }
         }
         for (key, from) in &binding.param_inputs {
@@ -399,10 +395,10 @@ fn run_tick(inner: &mut EngineInner) {
             if let Some(rt) = inner.nodes.get_mut(&id) {
                 let _ = rt.instance.set_param(key, &json);
             }
-            if let Some(gn) = inner.graph.node_mut(id) {
-                if let Some(obj) = gn.params.as_object_mut() {
-                    obj.insert(key.clone(), json);
-                }
+            if let Some(gn) = inner.graph.node_mut(id)
+                && let Some(obj) = gn.params.as_object_mut()
+            {
+                obj.insert(key.clone(), json);
             }
         }
         let Some(rt) = inner.nodes.get_mut(&id) else {
@@ -446,12 +442,11 @@ fn tick_builtin(
         return;
     }
     let mut incoming = VfValue::empty();
-    if let Some(Some(p)) = binding.inputs.first() {
-        if let Some(src_rt) = inner.nodes.get(&p.node) {
-            if let Some(v) = src_rt.out_vals.get(p.port as usize) {
-                incoming = *v;
-            }
-        }
+    if let Some(Some(p)) = binding.inputs.first()
+        && let Some(src_rt) = inner.nodes.get(&p.node)
+        && let Some(v) = src_rt.out_vals.get(p.port as usize)
+    {
+        incoming = *v;
     }
     if incoming.tag != VfValueTag::Empty {
         let json = vf_to_json(incoming);

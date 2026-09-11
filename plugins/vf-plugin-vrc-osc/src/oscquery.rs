@@ -135,7 +135,6 @@ impl OscQueryHub {
         {
             let stop = stop.clone();
             let state = state.clone();
-            let host = host;
             threads.push(thread::spawn(move || {
                 probe_loop(stop, state, manual_host, manual_port, host);
             }));
@@ -267,11 +266,11 @@ fn refresh_avatar(state: &Arc<Mutex<HubState>>, host: &Host, logged_id: &mut Str
     } else {
         ("127.0.0.1", VRC_QUERY_PORT)
     };
-    if let Some(body) = http_get(qh.0, qh.1, "/avatar") {
-        if let Ok(value) = serde_json::from_str::<Value>(&body) {
-            query_id = avatar_id(&value);
-            query_params = collect_typed_paths(&value);
-        }
+    if let Some(body) = http_get(qh.0, qh.1, "/avatar")
+        && let Ok(value) = serde_json::from_str::<Value>(&body)
+    {
+        query_id = avatar_id(&value);
+        query_params = collect_typed_paths(&value);
     }
     let want_id = if !pending_id.is_empty() {
         pending_id
@@ -536,12 +535,11 @@ pub fn collect_typed_paths(node: &Value) -> HashSet<String> {
 }
 
 fn collect_typed_paths_inner(node: &Value, out: &mut HashSet<String>) {
-    if let Some(ty) = node.get("TYPE").and_then(Value::as_str) {
-        if !ty.is_empty() {
-            if let Some(path) = node.get("FULL_PATH").and_then(Value::as_str) {
-                out.insert(path.to_string());
-            }
-        }
+    if let Some(ty) = node.get("TYPE").and_then(Value::as_str)
+        && !ty.is_empty()
+        && let Some(path) = node.get("FULL_PATH").and_then(Value::as_str)
+    {
+        out.insert(path.to_string());
     }
     if let Some(map) = node.get("CONTENTS").and_then(Value::as_object) {
         for child in map.values() {

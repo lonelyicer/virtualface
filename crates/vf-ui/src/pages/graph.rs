@@ -229,10 +229,10 @@ impl Workspace {
         let id = self.add_node_at_raw(ty.get_type_id(), world);
         self.select_only(id);
         self.close_add_menu();
-        if let Some(n) = self.session.graph.lock().node_mut(id) {
-            if let Some(obj) = n.params.as_object_mut() {
-                obj.insert("name".into(), serde_json::json!(name));
-            }
+        if let Some(n) = self.session.graph.lock().node_mut(id)
+            && let Some(obj) = n.params.as_object_mut()
+        {
+            obj.insert("name".into(), serde_json::json!(name));
         }
         self.session
             .engine
@@ -248,10 +248,10 @@ impl Workspace {
     }
 
     fn sync_primary(&mut self) {
-        if let Some(id) = self.primary {
-            if self.selected.contains(&id) {
-                return;
-            }
+        if let Some(id) = self.primary
+            && self.selected.contains(&id)
+        {
+            return;
         }
         self.primary = self.selected.iter().copied().next();
     }
@@ -660,10 +660,10 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let before = self.snapshot_graph();
-        if let Some(n) = self.session.graph.lock().node_mut(id) {
-            if let Some(obj) = n.params.as_object_mut() {
-                obj.insert(key.to_string(), value.clone());
-            }
+        if let Some(n) = self.session.graph.lock().node_mut(id)
+            && let Some(obj) = n.params.as_object_mut()
+        {
+            obj.insert(key.to_string(), value.clone());
         }
         self.session.engine.set_param(id, key.to_string(), value);
         self.commit_graph_change(before, cx);
@@ -699,7 +699,7 @@ impl Workspace {
             .flex_shrink_0()
             .w(px(240.))
             .on_prepaint(move |bounds, _, cx| {
-                let _ = view.update(cx, |this, _| {
+                view.update(cx, |this, _| {
                     this.archive_picker_bounds = bounds;
                 });
             })
@@ -1017,23 +1017,22 @@ impl Workspace {
             output,
             current,
         } = drag
+            && let Some(sn) = graph.node(from.node)
         {
-            if let Some(sn) = graph.node(from.node) {
-                let py = sn.y + scene.nodes[&sn.id].layout.pin_y(!output, from.port);
-                let (x0, y0, x1, y1) = if output {
-                    (sn.x + NODE_W, py, current.x, current.y)
-                } else {
-                    (current.x, current.y, sn.x, py)
-                };
-                wire = Some(FlowEdge {
-                    x0,
-                    y0,
-                    x1,
-                    y1,
-                    color: rgb(0xb1b1b7).into(),
-                    dashed: true,
-                });
-            }
+            let py = sn.y + scene.nodes[&sn.id].layout.pin_y(!output, from.port);
+            let (x0, y0, x1, y1) = if output {
+                (sn.x + NODE_W, py, current.x, current.y)
+            } else {
+                (current.x, current.y, sn.x, py)
+            };
+            wire = Some(FlowEdge {
+                x0,
+                y0,
+                x1,
+                y1,
+                color: rgb(0xb1b1b7).into(),
+                dashed: true,
+            });
         }
 
         let focused_nodes: HashSet<u64> = self
@@ -1188,7 +1187,7 @@ impl Workspace {
         let right = (cw - local_x - pad).max(180.0);
         let left = (local_x - pad).max(180.0);
         let max_h = below.max(above).min(420.0);
-        let max_w = right.max(left).min(280.0).max(200.0);
+        let max_w = right.max(left).clamp(200.0, 280.0);
         let origin = point(
             self.canvas_bounds.origin.x + menu.pos.x,
             self.canvas_bounds.origin.y + menu.pos.y,
@@ -1733,7 +1732,7 @@ impl Workspace {
                 } else {
                     cur.as_f64()
                         .or_else(|| cur.as_i64().map(|i| i as f64))
-                        .map(|v| format_float_text(v))
+                        .map(format_float_text)
                         .unwrap_or_else(|| "0".into())
                 };
                 Some(self.pin_text_input(id, &key, initial, Some(intish), window, cx, zoom))
@@ -1827,6 +1826,7 @@ impl Workspace {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn pin_text_input(
         &mut self,
         id: NodeId,

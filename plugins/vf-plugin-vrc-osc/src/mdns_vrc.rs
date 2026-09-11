@@ -159,7 +159,7 @@ fn parse_vrchat_answer(
     if !(inst.starts_with("VRChat-Client") || inst.starts_with("ChilloutVR-GameClient")) {
         return;
     }
-    if owner.join(".").to_ascii_lowercase() != "_oscjson._tcp.local" {
+    if !owner.join(".").eq_ignore_ascii_case("_oscjson._tcp.local") {
         return;
     }
     let mut scan = *pos;
@@ -187,12 +187,11 @@ fn parse_vrchat_answer(
         }
         scan += n;
     }
-    if ip.is_loopback() {
-        if let SocketAddr::V4(v4) = from {
-            if !v4.ip().is_loopback() {
-                ip = *v4.ip();
-            }
-        }
+    if ip.is_loopback()
+        && let SocketAddr::V4(v4) = from
+        && !v4.ip().is_loopback()
+    {
+        ip = *v4.ip();
     }
     apply_query_endpoint(state, ip.to_string(), port);
 }

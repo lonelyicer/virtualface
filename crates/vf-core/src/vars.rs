@@ -119,10 +119,8 @@ pub fn sanitize_var_name(raw: &str) -> String {
     for c in raw.trim().chars() {
         if c.is_ascii_alphanumeric() || c == '_' {
             out.push(c);
-        } else if c.is_whitespace() || c == '-' {
-            if !out.ends_with('_') {
-                out.push('_');
-            }
+        } else if (c.is_whitespace() || c == '-') && !out.ends_with('_') {
+            out.push('_');
         }
     }
     if out.is_empty() {

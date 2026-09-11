@@ -178,14 +178,14 @@ impl Node for VrcOscOutput {
         let port = snap.as_ref().map(|s| s.send_port).unwrap_or(self.port);
         let native_gaze = snap.as_ref().map(|s| s.native_gaze).unwrap_or(false);
         let native_lid = snap.as_ref().map(|s| s.native_lid).unwrap_or(false);
-        if let Some(s) = &snap {
-            if s.avatar_id != self.seen_avatar {
-                self.seen_avatar = s.avatar_id.clone();
-                self.last.clear();
-                self.last_gaze = None;
-                self.last_lid = None;
-                self.sent_active = false;
-            }
+        if let Some(s) = &snap
+            && s.avatar_id != self.seen_avatar
+        {
+            self.seen_avatar = s.avatar_id.clone();
+            self.last.clear();
+            self.last_gaze = None;
+            self.last_lid = None;
+            self.sent_active = false;
         }
         self.ensure_sock(&host, port)?;
 
@@ -219,10 +219,10 @@ impl Node for VrcOscOutput {
             }) else {
                 continue;
             };
-            if let Some(prev) = self.last.get(&name) {
-                if (prev - value).abs() < 1e-4 {
-                    continue;
-                }
+            if let Some(prev) = self.last.get(&name)
+                && (prev - value).abs() < 1e-4
+            {
+                continue;
             }
             self.last.insert(name.clone(), value);
             let bits = if self.binary_bits > 0 {

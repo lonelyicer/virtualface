@@ -31,10 +31,10 @@ pub(crate) fn bootstrap_archives(session: &Arc<Session>, unnamed: &str) -> Archi
 
     if index.items.is_empty() {
         if let Some(legacy) = last_graph_path().filter(|p| p.is_file()) {
-            if path_hint.is_empty() {
-                if let Ok(raw) = std::fs::read_to_string(&legacy) {
-                    let _ = session.load_graph_str(&raw);
-                }
+            if path_hint.is_empty()
+                && let Ok(raw) = std::fs::read_to_string(&legacy)
+            {
+                let _ = session.load_graph_str(&raw);
             }
             let stem = graph_display_name(&legacy.to_string_lossy(), unnamed);
             if let Err(e) = import_session_as_archive(session, &mut index, &stem) {
@@ -48,28 +48,28 @@ pub(crate) fn bootstrap_archives(session: &Arc<Session>, unnamed: &str) -> Archi
         return index;
     }
 
-    if path_hint.is_empty() || !index.items.iter().any(|item| item.id == path_hint) {
-        if let Some(meta) = index.current_meta() {
-            match read_archive_json(&meta.id) {
-                Ok(raw) => {
-                    if let Err(e) = session.load_graph_str(&raw) {
-                        session.host.log.log(
-                            0,
-                            None,
-                            format!("failed to load archive {}: {e}", meta.name),
-                        );
-                    }
-                }
-                Err(e) => {
+    if (path_hint.is_empty() || !index.items.iter().any(|item| item.id == path_hint))
+        && let Some(meta) = index.current_meta()
+    {
+        match read_archive_json(&meta.id) {
+            Ok(raw) => {
+                if let Err(e) = session.load_graph_str(&raw) {
                     session.host.log.log(
                         0,
                         None,
-                        format!("failed to read archive {}: {e}", meta.name),
+                        format!("failed to load archive {}: {e}", meta.name),
                     );
                 }
             }
-            index.current = meta.id.clone();
+            Err(e) => {
+                session.host.log.log(
+                    0,
+                    None,
+                    format!("failed to read archive {}: {e}", meta.name),
+                );
+            }
         }
+        index.current = meta.id.clone();
     }
 
     *session.graph_path.lock() = index.current.clone();

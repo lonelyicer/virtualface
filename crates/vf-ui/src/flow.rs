@@ -258,6 +258,7 @@ fn node_layout_with_connections(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn node(
     n: &GraphNode,
     title: String,
@@ -465,6 +466,7 @@ pub fn node(
         .children(handles)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn snapshot_node(
     session: &Session,
     n: &GraphNode,

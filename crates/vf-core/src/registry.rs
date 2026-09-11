@@ -89,6 +89,8 @@ impl NodeType {
         self.input_tag(port).is_some()
     }
 
+    /// # Safety
+    /// `d` and every pointer it contains must be valid for the duration of this call.
     pub unsafe fn from_c(plugin_id: &str, plugin_name: &str, d: &VfNodeDescriptor) -> Result<Self> {
         if d.vtable.is_null() {
             return Err(CoreError::Load("null vtable".into()));

@@ -65,11 +65,11 @@ impl Fields {
             self.message = unquote(value);
             return;
         }
-        if name == "node" {
-            if let Ok(n) = value.parse::<u64>() {
-                self.node = Some(n);
-                return;
-            }
+        if name == "node"
+            && let Ok(n) = value.parse::<u64>()
+        {
+            self.node = Some(n);
+            return;
         }
         if !self.rest.is_empty() {
             self.rest.push(' ');

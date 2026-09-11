@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
 pub fn config_dir() -> Option<PathBuf> {
-    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        if !xdg.is_empty() {
-            return Some(PathBuf::from(xdg).join("virtualface"));
-        }
+    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME")
+        && !xdg.is_empty()
+    {
+        return Some(PathBuf::from(xdg).join("virtualface"));
     }
     std::env::var("HOME")
         .ok()

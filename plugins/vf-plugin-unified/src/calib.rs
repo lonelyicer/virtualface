@@ -148,10 +148,10 @@ impl Node for Calibration {
     }
 
     fn set_state(&mut self, state: &serde_json::Value) -> Result<()> {
-        if let Ok(s) = serde_json::from_value::<Vec<CalibParam>>(state.clone()) {
-            if s.len() == self.shapes.len() {
-                self.shapes = s;
-            }
+        if let Ok(s) = serde_json::from_value::<Vec<CalibParam>>(state.clone())
+            && s.len() == self.shapes.len()
+        {
+            self.shapes = s;
         }
         Ok(())
     }

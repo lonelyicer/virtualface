@@ -15,7 +15,9 @@ pub struct NodeInstance {
 unsafe impl Send for NodeInstance {}
 
 impl NodeInstance {
-    pub fn create(
+    /// # Safety
+    /// `host` must remain a valid `VfHostApi` for the lifetime of the instance.
+    pub unsafe fn create(
         ty: &NodeType,
         host: *const VfHostApi,
         handle: u64,
@@ -149,7 +151,7 @@ pub enum PortBuffer {
 impl PortBuffer {
     pub fn from_port(tag: VfValueTag, schema: &str, capacity: u32) -> Self {
         match tag {
-            VfValueTag::UnifiedFrame => PortBuffer::Unified(Box::new(VfUnifiedFrame::default())),
+            VfValueTag::UnifiedFrame => PortBuffer::Unified(Box::default()),
             VfValueTag::Bytes => {
                 let cap = capacity.max(1) as usize;
                 PortBuffer::Bytes {
@@ -194,7 +196,7 @@ pub fn snapshot_value(v: &VfValue) -> SnapshotValue {
         VfValueTag::Vec3 => SnapshotValue::Vec3(unsafe { v.payload.vec3 }),
         VfValueTag::UnifiedFrame => {
             let f = unsafe { v.as_unified() };
-            SnapshotValue::Unified(f.cloned().unwrap_or_default())
+            SnapshotValue::Unified(Box::new(f.cloned().unwrap_or_default()))
         }
         VfValueTag::Bytes => {
             let b = unsafe { v.payload.bytes };
@@ -217,7 +219,7 @@ pub enum SnapshotValue {
     Bool(bool),
     Vec2([f32; 2]),
     Vec3([f32; 3]),
-    Unified(VfUnifiedFrame),
+    Unified(Box<VfUnifiedFrame>),
     Text(String),
 }
 
@@ -269,7 +271,7 @@ pub struct NodeSnap {
     pub state: Option<serde_json::Value>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Snapshot {
     pub tick: u64,
     /// Duration of the last engine tick, in microseconds.
@@ -278,17 +280,4 @@ pub struct Snapshot {
     pub drops: u64,
     pub last_tick_us: u64,
     pub nodes: std::collections::HashMap<u64, NodeSnap>,
-}
-
-impl Default for Snapshot {
-    fn default() -> Self {
-        Self {
-            tick: 0,
-            dt_us: 0,
-            running: false,
-            drops: 0,
-            last_tick_us: 0,
-            nodes: std::collections::HashMap::new(),
-        }
-    }
 }

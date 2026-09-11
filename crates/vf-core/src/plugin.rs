@@ -168,11 +168,11 @@ fn is_plugin_lib(path: &Path) -> bool {
 pub fn default_plugin_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     dirs.push(PathBuf::from("plugins"));
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            dirs.push(parent.join("plugins"));
-            dirs.push(parent.to_path_buf());
-        }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(parent) = exe.parent()
+    {
+        dirs.push(parent.join("plugins"));
+        dirs.push(parent.to_path_buf());
     }
     // Workspace target dir during development.
     dirs.push(PathBuf::from("target/debug"));

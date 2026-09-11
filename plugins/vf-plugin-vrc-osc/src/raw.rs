@@ -53,10 +53,10 @@ impl Node for OscRawOutput {
             addr: self.address.clone(),
             args: vec![OscType::Float(v)],
         });
-        if let Ok(bytes) = encoder::encode(&pkt) {
-            if let (Some(sock), Some(addr)) = (&self.sock, self.addr) {
-                let _ = sock.send_to(&bytes, addr);
-            }
+        if let Ok(bytes) = encoder::encode(&pkt)
+            && let (Some(sock), Some(addr)) = (&self.sock, self.addr)
+        {
+            let _ = sock.send_to(&bytes, addr);
         }
         Ok(())
     }

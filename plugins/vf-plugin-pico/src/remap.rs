@@ -62,10 +62,10 @@ pub const PICO_TO_ARKIT: [Option<usize>; 52] = [
 pub(crate) fn pico_to_arkit(pico: &[f32]) -> [f32; ARKIT_COUNT] {
     let mut out = [0f32; ARKIT_COUNT];
     for (pico_i, dst) in PICO_TO_ARKIT.iter().enumerate() {
-        if let Some(ai) = *dst {
-            if let Some(v) = pico.get(pico_i) {
-                out[ai] = *v;
-            }
+        if let Some(ai) = *dst
+            && let Some(v) = pico.get(pico_i)
+        {
+            out[ai] = *v;
         }
     }
     out

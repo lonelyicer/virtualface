@@ -204,10 +204,10 @@ fn fallback_from_spdx(spdx: &str, catalog: &HashMap<String, String>) -> String {
         {
             continue;
         }
-        if let Some(text) = catalog.get(id) {
-            if !parts.iter().any(|(seen, _)| *seen == id) {
-                parts.push((id, text));
-            }
+        if let Some(text) = catalog.get(id)
+            && !parts.iter().any(|(seen, _)| *seen == id)
+        {
+            parts.push((id, text));
         }
     }
     if parts.is_empty() {

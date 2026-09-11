@@ -409,7 +409,7 @@ pub mod __abi {
         config_json: *const c_char,
     ) -> *mut c_void {
         let host = unsafe { Host::from_raw(host, node_handle) };
-        let config = parse_config_json(config_json);
+        let config = unsafe { parse_config_json(config_json) };
         match catch_unwind(AssertUnwindSafe(|| T::create(host, &config))) {
             Ok(Ok(node)) => Box::into_raw(Box::new(node)).cast(),
             Ok(Err(e)) => {
@@ -487,7 +487,7 @@ pub mod __abi {
         }
         let node = unsafe { &mut *ptr.cast::<T>() };
         let key = unsafe { crate::host::cstr_opt(key) }.unwrap_or("");
-        let value = json_from_ptr(value_json).unwrap_or(serde_json::Value::Null);
+        let value = unsafe { json_from_ptr(value_json) }.unwrap_or(serde_json::Value::Null);
         match catch_unwind(AssertUnwindSafe(|| node.set_param(key, &value))) {
             Ok(Ok(())) => VF_OK,
             _ => VF_ERR,
@@ -519,7 +519,7 @@ pub mod __abi {
             return VF_ERR;
         }
         let node = unsafe { &mut *ptr.cast::<T>() };
-        let value = json_from_ptr(json).unwrap_or(serde_json::Value::Null);
+        let value = unsafe { json_from_ptr(json) }.unwrap_or(serde_json::Value::Null);
         match catch_unwind(AssertUnwindSafe(|| node.set_state(&value))) {
             Ok(Ok(())) => VF_OK,
             _ => VF_ERR,

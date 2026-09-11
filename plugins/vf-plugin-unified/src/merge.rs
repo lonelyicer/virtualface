@@ -89,26 +89,28 @@ mod tests {
     use vf_abi::{VfEyeData, VfEyeSample, VfHeadData};
 
     fn full_frame(marker: f32, ts: u64) -> VfUnifiedFrame {
-        let mut f = VfUnifiedFrame::default();
-        f.timestamp_us = ts;
-        f.valid = VF_VALID_EYE | VF_VALID_EXPR | VF_VALID_HEAD;
-        f.eye = VfEyeData {
-            left: VfEyeSample {
-                gaze: [marker, marker + 0.1],
-                openness: marker,
-                pupil_mm: marker,
+        let mut f = VfUnifiedFrame {
+            timestamp_us: ts,
+            valid: VF_VALID_EYE | VF_VALID_EXPR | VF_VALID_HEAD,
+            eye: VfEyeData {
+                left: VfEyeSample {
+                    gaze: [marker, marker + 0.1],
+                    openness: marker,
+                    pupil_mm: marker,
+                },
+                right: VfEyeSample {
+                    gaze: [marker + 0.2, marker + 0.3],
+                    openness: marker + 0.05,
+                    pupil_mm: marker + 0.05,
+                },
             },
-            right: VfEyeSample {
-                gaze: [marker + 0.2, marker + 0.3],
-                openness: marker + 0.05,
-                pupil_mm: marker + 0.05,
+            head: VfHeadData {
+                yaw: marker,
+                pitch: marker + 1.0,
+                roll: marker + 2.0,
+                pos: [marker, marker + 1.0, marker + 2.0],
             },
-        };
-        f.head = VfHeadData {
-            yaw: marker,
-            pitch: marker + 1.0,
-            roll: marker + 2.0,
-            pos: [marker, marker + 1.0, marker + 2.0],
+            ..Default::default()
         };
         for expr in UnifiedExpression::ALL {
             f.shapes[expr.index()] = marker + expr.index() as f32 * 0.001;

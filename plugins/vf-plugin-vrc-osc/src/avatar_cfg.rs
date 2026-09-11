@@ -180,10 +180,11 @@ fn osc_dirs() -> Vec<PathBuf> {
             if p.is_dir() && !out.contains(&p) {
                 out.push(p);
             }
-            if let Some(extra) = osc_from_libraryfolders(&steam) {
-                if extra.is_dir() && !out.contains(&extra) {
-                    out.push(extra);
-                }
+            if let Some(extra) = osc_from_libraryfolders(&steam)
+                && extra.is_dir()
+                && !out.contains(&extra)
+            {
+                out.push(extra);
             }
         }
     }

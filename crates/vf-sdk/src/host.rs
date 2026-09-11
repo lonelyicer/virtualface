@@ -120,6 +120,8 @@ impl NodeStatus {
     }
 }
 
+/// # Safety
+/// `p` must be null or a valid, NUL-terminated C string that outlives the returned borrow.
 pub unsafe fn cstr_opt<'a>(p: *const std::ffi::c_char) -> Option<&'a str> {
     if p.is_null() {
         None
@@ -128,20 +130,20 @@ pub unsafe fn cstr_opt<'a>(p: *const std::ffi::c_char) -> Option<&'a str> {
     }
 }
 
-pub fn parse_config_json(p: *const std::ffi::c_char) -> serde_json::Value {
-    unsafe {
-        match cstr_opt(p) {
-            None | Some("") => serde_json::json!({}),
-            Some(s) => serde_json::from_str(s).unwrap_or_else(|_| serde_json::json!({})),
-        }
+/// # Safety
+/// `p` must be null or a valid, NUL-terminated C string.
+pub unsafe fn parse_config_json(p: *const std::ffi::c_char) -> serde_json::Value {
+    match unsafe { cstr_opt(p) } {
+        None | Some("") => serde_json::json!({}),
+        Some(s) => serde_json::from_str(s).unwrap_or_else(|_| serde_json::json!({})),
     }
 }
 
-pub fn json_from_ptr(p: *const std::ffi::c_char) -> Result<serde_json::Value, SdkError> {
-    unsafe {
-        match cstr_opt(p) {
-            None | Some("") => Ok(serde_json::Value::Null),
-            Some(s) => serde_json::from_str(s).map_err(|e| SdkError::Param(e.to_string())),
-        }
+/// # Safety
+/// `p` must be null or a valid, NUL-terminated C string.
+pub unsafe fn json_from_ptr(p: *const std::ffi::c_char) -> Result<serde_json::Value, SdkError> {
+    match unsafe { cstr_opt(p) } {
+        None | Some("") => Ok(serde_json::Value::Null),
+        Some(s) => serde_json::from_str(s).map_err(|e| SdkError::Param(e.to_string())),
     }
 }

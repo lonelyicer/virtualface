@@ -79,9 +79,11 @@ impl UeMapper {
     }
 
     pub fn map_arkit(&mut self, arkit: &[f32], ts_us: u64) -> VfUnifiedFrame {
-        let mut f = VfUnifiedFrame::default();
-        f.timestamp_us = ts_us;
-        f.valid = VF_VALID_EYE | VF_VALID_EXPR;
+        let mut f = VfUnifiedFrame {
+            timestamp_us: ts_us,
+            valid: VF_VALID_EYE | VF_VALID_EXPR,
+            ..Default::default()
+        };
 
         f.eye.left.openness = 1.0 - g(arkit, A_EYE_BLINK_L);
         f.eye.left.gaze[0] = g(arkit, A_EYE_LOOK_IN_L) - g(arkit, A_EYE_LOOK_OUT_L);

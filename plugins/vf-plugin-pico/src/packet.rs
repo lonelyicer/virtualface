@@ -25,9 +25,9 @@ fn parse_body(body: &[u8]) -> Option<PicoFrame> {
         return None;
     }
     let mut weights = [0f32; PICO_SHAPE_COUNT];
-    for i in 0..PICO_SHAPE_COUNT {
+    for (i, w) in weights.iter_mut().enumerate() {
         let s = BODY_WEIGHTS_OFFSET + i * 4;
-        weights[i] = f32::from_le_bytes(body[s..s + 4].try_into().ok()?);
+        *w = f32::from_le_bytes(body[s..s + 4].try_into().ok()?);
     }
     Some(PicoFrame { weights })
 }
@@ -39,9 +39,9 @@ fn encode_new_packet(weights: &[f32; PICO_SHAPE_COUNT], timestamp: u64) -> Vec<u
     buf[1] = 0x46;
     buf[2] = 2; // trackingType face
     buf[HEADER_SIZE..HEADER_SIZE + 8].copy_from_slice(&timestamp.to_le_bytes());
-    for i in 0..PICO_SHAPE_COUNT {
+    for (i, w) in weights.iter().enumerate() {
         let s = HEADER_SIZE + BODY_WEIGHTS_OFFSET + i * 4;
-        buf[s..s + 4].copy_from_slice(&weights[i].to_le_bytes());
+        buf[s..s + 4].copy_from_slice(&w.to_le_bytes());
     }
     buf
 }

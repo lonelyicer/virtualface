@@ -57,42 +57,6 @@ impl LogView {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use core::prelude::v1::test;
-
-    #[test]
-    fn log_retention_preserves_history_scroll_and_formats_only_new_rows() {
-        let bus = LogBus::new();
-        for i in 0..500 {
-            bus.log(2, None, format!("line {i}\ncontinued"));
-        }
-        let mut view = LogView::new();
-        view.sync(&bus);
-        assert_eq!(view.rows.len(), 500);
-        assert_eq!(view.list.item_count(), 500);
-        assert!(view.list.is_following_tail());
-        assert!(view.rows[0].text.contains("line 0\ncontinued"));
-        let existing_text = view.rows[150].text.clone();
-        view.list.scroll_to(ListOffset {
-            item_ix: 150,
-            offset_in_item: px(3.),
-        });
-        bus.log(2, None, "newest");
-        view.sync(&bus);
-        assert_eq!(view.rows.len(), 500);
-        assert_eq!(view.list.item_count(), 500);
-        assert!(!view.list.is_following_tail());
-        assert_eq!(view.list.logical_scroll_top().item_ix, 149);
-        assert_eq!(view.list.logical_scroll_top().offset_in_item, px(3.));
-        assert_eq!(view.rows[149].text, existing_text);
-        assert!(view.rows.back().unwrap().text.ends_with("newest"));
-        view.sync(&bus);
-        assert_eq!(view.list.logical_scroll_top().item_ix, 149);
-    }
-}
-
 impl Workspace {
     pub(crate) fn log_page(&mut self, cx: &mut Context<Self>, muted: Hsla) -> impl IntoElement {
         self.log_view.sync(&self.session.host.log);
@@ -144,5 +108,41 @@ impl Workspace {
                         }
                     }),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::prelude::v1::test;
+
+    #[test]
+    fn log_retention_preserves_history_scroll_and_formats_only_new_rows() {
+        let bus = LogBus::new();
+        for i in 0..500 {
+            bus.log(2, None, format!("line {i}\ncontinued"));
+        }
+        let mut view = LogView::new();
+        view.sync(&bus);
+        assert_eq!(view.rows.len(), 500);
+        assert_eq!(view.list.item_count(), 500);
+        assert!(view.list.is_following_tail());
+        assert!(view.rows[0].text.contains("line 0\ncontinued"));
+        let existing_text = view.rows[150].text.clone();
+        view.list.scroll_to(ListOffset {
+            item_ix: 150,
+            offset_in_item: px(3.),
+        });
+        bus.log(2, None, "newest");
+        view.sync(&bus);
+        assert_eq!(view.rows.len(), 500);
+        assert_eq!(view.list.item_count(), 500);
+        assert!(!view.list.is_following_tail());
+        assert_eq!(view.list.logical_scroll_top().item_ix, 149);
+        assert_eq!(view.list.logical_scroll_top().offset_in_item, px(3.));
+        assert_eq!(view.rows[149].text, existing_text);
+        assert!(view.rows.back().unwrap().text.ends_with("newest"));
+        view.sync(&bus);
+        assert_eq!(view.list.logical_scroll_top().item_ix, 149);
     }
 }
